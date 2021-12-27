@@ -22,8 +22,15 @@ python3 Beyond-All-Reason.py
 pyinstaller -y --clean --onefile --icon icon.ico Beyond-All-Reason.py
 ```
 
-### 4. Copy and run the executable (change to Beyond-All-Reason.exe for Windows)
+### 4. Copy and run the executable
+Linux/MacOS:
 ```bash
 cp ./dist/Beyond-All-Reason .
 ./Beyond-All-Reason
+```
+
+Windows:
+```bash
+cp ./dist/Beyond-All-Reason.exe .
+./Beyond-All-Reason.exe
 ```
