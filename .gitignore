@@ -1,3 +1,12 @@
+# BAR data
+data/*
+# Except Chobby config
+!data/chobby_config.json
+
+# BAR executables
+Beyond-All-Reason
+Beyond-All-Reason.exe
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
