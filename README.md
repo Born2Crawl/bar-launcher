@@ -19,7 +19,7 @@ python3 Beyond-All-Reason.py
 
 ### 3. Build the executable
 ```bash
-pyinstaller -y --clean --onefile --icon icon.ico Beyond-All-Reason.py
+pyinstaller -y --clean --onefile --icon resources/icon.ico Beyond-All-Reason.py
 ```
 
 ### 4. Copy and run the executable
