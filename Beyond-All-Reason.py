@@ -73,9 +73,6 @@ class PrDownloader():
 pr_downloader = PrDownloader()
 
 class ConfigManager():
-    config_url = 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json'
-    config_path = os.path.join(platform_manager.current_dir, 'config.json')
-
     compatible_configs = []
     current_config = {}
 
@@ -83,12 +80,15 @@ class ConfigManager():
         self.compatible_configs = self.get_compatible_configs()
 
     def read_config(self):
-        if not os.path.isfile(self.config_path):
-            print(f'Config file not found, downloading one from {self.config_url}')
-            http_downloader.download_file(self.config_url, self.config_path)
+        config_url = 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json'
+        config_path = os.path.join(platform_manager.current_dir, 'config.json')
 
-        print(f'Reading the config file from {self.config_path}')
-        f = open(self.config_path)
+        if not os.path.isfile(config_path):
+            print(f'Config file not found, downloading one from {config_url}')
+            http_downloader.download_file(config_url, config_path)
+
+        print(f'Reading the config file from {config_path}')
+        f = open(config_path)
         data = json.load(f)
         f.close()
         return data
