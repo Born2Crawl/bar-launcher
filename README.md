@@ -12,6 +12,11 @@ python3 -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+For Ubuntu, you'll have to install wxPython with apt:
+```bash
+apt-get install python3-wxgtk4.0
+```
+
 ### 2. Run the script
 ```bash
 python3 Beyond-All-Reason.py
