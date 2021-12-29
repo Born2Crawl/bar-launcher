@@ -1,15 +1,79 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+
 import os
 import wx
+import sys
 import json
+import logging
 import platform
 import requests
 import subprocess
+from threading import *
+
+# Cutons events to notify about Update/Start execution finished and logging output
+event_notify_frame = None
+EVT_EXEC_FINISHED_ID = wx.NewIdRef(count=1)
+EVT_LOG_LINE_ID = wx.NewIdRef(count=1)
+
+def EVT_EXEC_FINISHED(win, func):
+    win.Connect(-1, -1, EVT_EXEC_FINISHED_ID, func)
+
+def EVT_LOG_LINE(win, func):
+    win.Connect(-1, -1, EVT_LOG_LINE_ID, func)
+
+class ExecFinishedEvent(wx.PyEvent):
+    def __init__(self, data):
+        wx.PyEvent.__init__(self)
+        self.SetEventType(EVT_EXEC_FINISHED_ID)
+        self.data = data
+
+class LogLineEvent(wx.PyEvent):
+    def __init__(self, data):
+        wx.PyEvent.__init__(self)
+        self.SetEventType(EVT_LOG_LINE_ID)
+        self.data = data
+
+class FileManager():
+    def get_current_dir(self):
+        return os.getcwd()
+
+    def get_dir_name(self, path):
+        return os.path.dirname(path)
+
+    def join_path(self, *args):
+        return os.path.join(*args)
+
+    def file_exists(self, path):
+        return os.path.isfile(path)
+
+    def dir_exists(self, path):
+        return os.path.isdir(path)
+
+    def make_dirs(self, path):
+        return os.makedirs(path, exist_ok=True)
+
+    def rename(self, current_path, new_path):
+        try:
+            return os.rename(current_path, new_path)
+        except:
+            logging.error('Couldn\'t rename!')
+            e = sys.exc_info()[1]
+            logging.error(e)
+
+    def remove(self, path):
+        try:
+            return os.remove(path)
+        except:
+            logging.error('Couldn\'t remove!')
+            e = sys.exc_info()[1]
+            logging.error(e)
+
+file_manager = FileManager()
 
 class PlatformManager():
     current_platform = platform.system()
-    current_dir = os.getcwd()
+    current_dir = file_manager.get_current_dir()
 
     platform_binaries = {
         'Windows': {
@@ -30,45 +94,63 @@ class PlatformManager():
     }
 
     zip_bin = platform_binaries[current_platform]['7zip']
-    zip_path = os.path.join(current_dir, 'bin', zip_bin)
+    zip_path = file_manager.join_path(current_dir, 'bin', zip_bin)
     pr_downloader_bin = platform_binaries[current_platform]['pr_downloader']
-    pr_downloader_path = os.path.join(current_dir, 'bin', pr_downloader_bin)
+    pr_downloader_path = file_manager.join_path(current_dir, 'bin', pr_downloader_bin)
     spring_bin = platform_binaries[current_platform]['spring']
 
 platform_manager = PlatformManager()
 
 class ProcessStarter():
     def start_process(self, command):
-        print(' '.join(command))
-        with subprocess.Popen(command, stdout=subprocess.PIPE) as proc:
-            while True:
-                line = proc.stdout.readline()
-                if not line:
-                    break
-                print(line.rstrip().decode('utf-8'))
+        global event_notify_frame
+
+        logging.info('Starting a process:')
+        logging.info(' '.join(command))
+        try:
+            with subprocess.Popen(command, stdout=subprocess.PIPE) as proc:
+                while True:
+                    line = proc.stdout.readline()
+                    if not line:
+                        break
+                    wx.PostEvent(event_notify_frame, LogLineEvent(line.rstrip().decode('utf-8')))
+            return True
+        except:
+            logging.error('Process start failed!')
+            e = sys.exc_info()[1]
+            logging.error(e)
+            return False
 
 process_starter = ProcessStarter()
 
 class ArchiveExtractor():
     def extract_7zip(self, archive_name, destination):
-        print(f'Extracting archive: "{archive_name}" "{destination}"')
+        logging.info(f'Extracting archive: "{archive_name}" "{destination}"')
         command = [platform_manager.zip_path, 'x', archive_name, '-y', f'-o{destination}']
-        process_starter.start_process(command)
+        return process_starter.start_process(command)
 
 archive_extractor = ArchiveExtractor()
 
 class HttpDownloader():
     def download_file(self, source_url, target_file):
-        print(f'Downloading: "{source_url}" to: "{target_file}"')
-        r = requests.get(source_url, allow_redirects=True)
-        open(target_file, 'wb').write(r.content)
+        logging.info(f'Downloading: "{source_url}" to: "{target_file}"')
+        try:
+            r = requests.get(source_url, allow_redirects=True)
+            open(target_file, 'wb').write(r.content)
+        except:
+            logging.error('Download failed:')
+            e = sys.exc_info()[1]
+            logging.error(e)
+            return False
+
+        return True
 
 http_downloader = HttpDownloader()
 
 class PrDownloader():
     def download_game(self, data_dir, game_name):
         command = [platform_manager.pr_downloader_path, '--filesystem-writepath', data_dir, '--download-game', game_name]
-        process_starter.start_process(command)
+        return process_starter.start_process(command)
 
 pr_downloader = PrDownloader()
 
@@ -81,13 +163,13 @@ class ConfigManager():
 
     def read_config(self):
         config_url = 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json'
-        config_path = os.path.join(platform_manager.current_dir, 'config.json')
+        config_path = file_manager.join_path(platform_manager.current_dir, 'config.json')
 
-        if not os.path.isfile(config_path):
-            print(f'Config file not found, downloading one from {config_url}')
+        if not file_manager.file_exists(config_path):
+            logging.info(f'Config file not found, downloading one from {config_url}')
             http_downloader.download_file(config_url, config_path)
 
-        print(f'Reading the config file from {config_path}')
+        logging.info(f'Reading the config file from {config_path}')
         f = open(config_path)
         data = json.load(f)
         f.close()
@@ -118,71 +200,101 @@ class ConfigManager():
 
 config_manager = ConfigManager()
 
-class UpdateManager():
-    data_dir = os.path.join(platform_manager.current_dir, 'data')
-    temp_archive_name = os.path.join(data_dir, 'download.7z')
+# Thread class that executes Update/Start
+class UpdaterStarterThread(Thread):
+    data_dir = file_manager.join_path(platform_manager.current_dir, 'data')
+    temp_archive_name = file_manager.join_path(data_dir, 'download.7z')
 
-    def update(self):
-        setup = config_manager.current_config
-        pr_downloader_games = {}
-        http_resources = {}
-        launchers = []
+    def __init__(self, is_update):
+        Thread.__init__(self)
+        self.is_update = is_update
+        self.start()
 
-        if 'games' in setup['downloads']:
-            for game in setup['downloads']['games']:
-                pr_downloader_games.update({game: game})
-        if 'resources' in setup['downloads']:
-            for resource in setup['downloads']['resources']:
-                http_resources.update({resource['url']: resource})
+    def run(self):
+        global event_notify_frame
 
-        for n in pr_downloader_games:
-            print('================================================================================')
-            pr_downloader.download_game(self.data_dir, pr_downloader_games[n])
+        config = config_manager.current_config
 
-        for n in http_resources:
-            print('================================================================================')
-            resource = http_resources[n]
-            destination = os.path.join(self.data_dir, resource['destination'])
+        try:
+            if self.is_update:
+                pr_downloader_games = {}
+                http_resources = {}
+                launchers = []
 
-            if os.path.isfile(destination) or os.path.isdir(destination):
-                print(f'"{destination}" already exists, skipping...')
-                continue
+                # Updating the game according to the current config
+                if 'games' in config['downloads']:
+                    for game in config['downloads']['games']:
+                        pr_downloader_games.update({game: game})
 
-            url = resource['url']
-            is_extract = 'extract' in resource and resource['extract']
+                if 'resources' in config['downloads']:
+                    for resource in config['downloads']['resources']:
+                        http_resources.update({resource['url']: resource})
 
-            http_downloader.download_file(url, self.temp_archive_name)
+                for n in pr_downloader_games:
+                    logging.info('================================================================================')
+                    if not pr_downloader.download_game(self.data_dir, pr_downloader_games[n]):
+                        raise Exception(f'Error updating {n}!')
 
-            if is_extract:
-                print(f'Creating directories: "{destination}"')
-                os.makedirs(destination, exist_ok=True)
+                for n in http_resources:
+                    logging.info('================================================================================')
+                    resource = http_resources[n]
+                    destination = file_manager.join_path(self.data_dir, resource['destination'])
 
-                archive_extractor.extract_7zip(self.temp_archive_name, destination)
+                    if file_manager.file_exists(destination) or file_manager.dir_exists(destination):
+                        logging.warning(f'"{destination}" already exists, skipping...')
+                        continue
 
-                print(f'Removing a temp file: "{self.temp_archive_name}"')
-                os.remove(self.temp_archive_name)
-            else:
-                destination_path = os.path.dirname(destination)
-                print(f'Creating directories: "{destination_path}"')
-                os.makedirs(destination_path, exist_ok=True)
-                print(f'Renaming a temp file: "{self.temp_archive_name}" to: "{destination}"')
-                os.rename(self.temp_archive_name, destination)
+                    url = resource['url']
+                    is_extract = 'extract' in resource and resource['extract']
 
-    def start(self):
-        setup = config_manager.current_config
+                    if not http_downloader.download_file(url, self.temp_archive_name):
+                        raise Exception(f'Error downloading: {url}!')
 
-        start_args = setup['launch']['start_args']
-        engine = setup['launch']['engine']
-        spring_path = os.path.join(self.data_dir, 'engine', engine, platform_manager.spring_bin)
+                    if is_extract:
+                        if file_manager.file_exists(self.temp_archive_name):
+                            logging.info(f'Creating directories: "{destination}"')
+                            file_manager.make_dirs(destination)
 
-        command = [spring_path, '--write-dir', self.data_dir, '--isolation']
-        command.extend(start_args)
-        process_starter.start_process(command)
+                            if not archive_extractor.extract_7zip(self.temp_archive_name, destination):
+                                raise Exception(f'Error extracting {self.temp_archive_name}!')
 
-update_manager = UpdateManager()
+                            logging.info(f'Removing a temp file: "{self.temp_archive_name}"')
+                            file_manager.remove(self.temp_archive_name)
+                        else:
+                            logging.info('Downloaded file didn\'t exist!')
+                    else:
+                        if file_manager.file_exists(self.temp_archive_name):
+                            destination_path = file_manager.get_dir_name(destination)
+                            logging.info(f'Creating directories: "{destination_path}"')
+                            file_manager.make_dirs(destination_path)
+
+                            logging.info(f'Renaming a temp file: "{self.temp_archive_name}" to: "{destination}"')
+                            file_manager.rename(self.temp_archive_name, destination)
+                        else:
+                            logging.info('Downloaded file didn\'t exist!')
+
+            # Starting the game
+            start_args = config['launch']['start_args']
+            engine = config['launch']['engine']
+            spring_path = file_manager.join_path(self.data_dir, 'engine', engine, platform_manager.spring_bin)
+
+            command = [spring_path, '--write-dir', self.data_dir, '--isolation']
+            command.extend(start_args)
+            if not process_starter.start_process(command):
+                raise Exception('Error starting the game!')
+
+            wx.PostEvent(event_notify_frame, ExecFinishedEvent(True))
+        except:
+            logging.error('Error while updating/starting:')
+            e = sys.exc_info()[1]
+            logging.error(e)
+            wx.PostEvent(event_notify_frame, ExecFinishedEvent(False))
 
 class LauncherFrame(wx.Frame):
+
     def __init__(self, *args, **kwds):
+        global event_notify_frame
+
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
         self.SetSize((703, 326))
@@ -207,8 +319,8 @@ class LauncherFrame(wx.Frame):
         label_config = wx.StaticText(self.panel_main, wx.ID_ANY, "Config:")
         sizer_config.Add(label_config, 0, 0, 0)
 
-        self.combo_box_config = wx.ComboBox(self.panel_main, wx.ID_ANY, choices=[], style=wx.CB_DROPDOWN | wx.CB_READONLY)
-        sizer_config.Add(self.combo_box_config, 0, 0, 0)
+        self.combobox_config = wx.ComboBox(self.panel_main, wx.ID_ANY, choices=[], style=wx.CB_DROPDOWN | wx.CB_READONLY)
+        sizer_config.Add(self.combobox_config, 0, 0, 0)
 
         sizer_bottom_horz = wx.BoxSizer(wx.HORIZONTAL)
         sizer_main_vert.Add(sizer_bottom_horz, 1, wx.EXPAND, 0)
@@ -256,15 +368,22 @@ class LauncherFrame(wx.Frame):
         self.Layout()
         self.Centre()
 
-        self.Bind(wx.EVT_COMBOBOX, self.OnComboboxConfig, self.combo_box_config)
+        self.Bind(wx.EVT_COMBOBOX, self.OnComboboxConfig, self.combobox_config)
         self.Bind(wx.EVT_BUTTON, self.OnButtonToggleLog, self.button_log_toggle)
         self.Bind(wx.EVT_BUTTON, self.OnButtonUploadLog, self.button_log_update)
         self.Bind(wx.EVT_BUTTON, self.OnButtonOpenInstallDir, self.button_open_install_dir)
         self.Bind(wx.EVT_CHECKBOX, self.OnCheckboxUpdate, self.checkbox_update)
         self.Bind(wx.EVT_BUTTON, self.OnButtonStart, self.button_start)
 
+        event_notify_frame = self
+
+        EVT_EXEC_FINISHED(self, self.OnExecFinished)
+        EVT_LOG_LINE(self, self.OnLogLine)
+
+        self.updater_starter = None
+
     def OnComboboxConfig(self, event=None):
-        config_manager.current_config = config_manager.compatible_configs[self.combo_box_config.GetSelection()]
+        config_manager.current_config = config_manager.compatible_configs[self.combobox_config.GetSelection()]
 
         no_downloads = False
         if 'no_downloads' in config_manager.current_config:
@@ -277,15 +396,15 @@ class LauncherFrame(wx.Frame):
             event.Skip()
 
     def OnButtonToggleLog(self, event):
-        print("Event handler 'OnButtonToggleLog' not implemented!")
+        logging.info("Event handler 'OnButtonToggleLog' not implemented!")
         event.Skip()
 
     def OnButtonUploadLog(self, event):
-        print("Event handler 'OnButtonUploadLog' not implemented!")
+        logging.info("Event handler 'OnButtonUploadLog' not implemented!")
         event.Skip()
 
     def OnButtonOpenInstallDir(self, event):
-        print("Event handler 'OnButtonOpenInstallDir' not implemented!")
+        logging.info("Event handler 'OnButtonOpenInstallDir' not implemented!")
         event.Skip()
 
     def OnCheckboxUpdate(self, event=None):
@@ -297,23 +416,44 @@ class LauncherFrame(wx.Frame):
         if event:
             event.Skip()
 
-    def OnButtonStart(self, event=None):
-        if self.checkbox_update.IsChecked():
-            update_manager.update()
+    def OnButtonStart(self, event):
+        global event_notify_frame
 
-        update_manager.start()
+        if not self.updater_starter:
+            self.button_start.Disable()
+            self.checkbox_update.Disable()
+            self.combobox_config.Disable()
 
-        if event:
-            event.Skip()
+            self.updater_starter = UpdaterStarterThread(self.checkbox_update.IsChecked())
+        else:
+            logging.warning('Update/Start process is already running!')
+
+        event.Skip()
+
+    def OnExecFinished(self, event):
+        self.button_start.Enable()
+        self.checkbox_update.Enable()
+        self.combobox_config.Enable()
+
+        if event.data:
+            logging.info('Start success!')
+        else:
+            logging.error('Start failed!')
+
+        self.updater_starter = None
+
+    def OnLogLine(self, event):
+        if event.data:
+            logging.info(event.data)
 
 class BARLauncher(wx.App):
     def OnInit(self):
         self.frame_launcher = LauncherFrame(None, wx.ID_ANY, "")
 
         #self.config_manager = ConfigManager()
-        self.frame_launcher.combo_box_config.Clear()
-        self.frame_launcher.combo_box_config.Append(config_manager.get_compatible_configs_names())
-        self.frame_launcher.combo_box_config.SetSelection(0)
+        self.frame_launcher.combobox_config.Clear()
+        self.frame_launcher.combobox_config.Append(config_manager.get_compatible_configs_names())
+        self.frame_launcher.combobox_config.SetSelection(0)
         self.frame_launcher.OnComboboxConfig()
 
         self.SetTopWindow(self.frame_launcher)
@@ -321,5 +461,8 @@ class BARLauncher(wx.App):
         return True
 
 if __name__ == "__main__":
+    logging.basicConfig(filename='bar-launcher.log', encoding='utf-8', level=logging.DEBUG)
+    logging.getLogger().setLevel(logging.DEBUG)
+
     BARLauncher = BARLauncher(0)
     BARLauncher.MainLoop()

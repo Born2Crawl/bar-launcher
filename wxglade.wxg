@@ -56,7 +56,7 @@
                                 <object class="sizeritem">
                                     <option>0</option>
                                     <border>0</border>
-                                    <object class="wxComboBox" name="combo_box_config" base="EditComboBox">
+                                    <object class="wxComboBox" name="combobox_config" base="EditComboBox">
                                         <events>
                                             <handler event="EVT_COMBOBOX">OnComboboxConfig</handler>
                                         </events>
