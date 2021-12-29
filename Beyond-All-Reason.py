@@ -297,7 +297,7 @@ class LauncherFrame(wx.Frame):
 
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
-        self.SetSize((703, 326))
+        self.SetSize((700, 200))
         self.SetTitle("Beyond All Reason")
 
         self.panel_main = wx.Panel(self, wx.ID_ANY)
@@ -305,16 +305,16 @@ class LauncherFrame(wx.Frame):
         sizer_main_vert = wx.BoxSizer(wx.VERTICAL)
 
         sizer_top_horz = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_main_vert.Add(sizer_top_horz, 1, wx.EXPAND, 0)
+        sizer_main_vert.Add(sizer_top_horz, 0, wx.ALL | wx.EXPAND, 4)
 
         label_title = wx.StaticText(self.panel_main, wx.ID_ANY, "Beyond All Reason")
         label_title.SetFont(wx.Font(20, wx.FONTFAMILY_MODERN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         sizer_top_horz.Add(label_title, 0, 0, 0)
 
-        sizer_top_horz.Add((290, 20), 0, 0, 0)
+        sizer_top_horz.Add((20, 20), 1, wx.EXPAND, 0)
 
         sizer_config = wx.BoxSizer(wx.VERTICAL)
-        sizer_top_horz.Add(sizer_config, 1, wx.EXPAND, 0)
+        sizer_top_horz.Add(sizer_config, 0, wx.EXPAND, 0)
 
         label_config = wx.StaticText(self.panel_main, wx.ID_ANY, "Config:")
         sizer_config.Add(label_config, 0, 0, 0)
@@ -323,7 +323,7 @@ class LauncherFrame(wx.Frame):
         sizer_config.Add(self.combobox_config, 0, 0, 0)
 
         sizer_bottom_horz = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_main_vert.Add(sizer_bottom_horz, 1, wx.EXPAND, 0)
+        sizer_main_vert.Add(sizer_bottom_horz, 0, wx.ALL | wx.EXPAND, 4)
 
         sizer_bottom_left_vert = wx.BoxSizer(wx.VERTICAL)
         sizer_bottom_horz.Add(sizer_bottom_left_vert, 1, wx.EXPAND, 0)
@@ -352,8 +352,10 @@ class LauncherFrame(wx.Frame):
 
         sizer_bottom_left_vert.Add((20, 20), 0, 0, 0)
 
+        sizer_bottom_horz.Add((20, 20), 0, 0, 0)
+
         sizer_bottom_right_vert = wx.BoxSizer(wx.VERTICAL)
-        sizer_bottom_horz.Add(sizer_bottom_right_vert, 1, wx.EXPAND, 0)
+        sizer_bottom_horz.Add(sizer_bottom_right_vert, 0, 0, 0)
 
         self.button_start = wx.Button(self.panel_main, wx.ID_ANY, "Start")
         self.button_start.SetMinSize((120, 60))
@@ -362,6 +364,9 @@ class LauncherFrame(wx.Frame):
 
         self.checkbox_update = wx.CheckBox(self.panel_main, wx.ID_ANY, "Update")
         sizer_bottom_right_vert.Add(self.checkbox_update, 0, 0, 0)
+
+        self.text_ctrl_log = wx.TextCtrl(self.panel_main, wx.ID_ANY, "", style=wx.TE_DONTWRAP | wx.TE_MULTILINE | wx.TE_READONLY)
+        sizer_main_vert.Add(self.text_ctrl_log, 1, wx.ALL | wx.EXPAND, 4)
 
         self.panel_main.SetSizer(sizer_main_vert)
 
@@ -372,9 +377,10 @@ class LauncherFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.OnButtonToggleLog, self.button_log_toggle)
         self.Bind(wx.EVT_BUTTON, self.OnButtonUploadLog, self.button_log_update)
         self.Bind(wx.EVT_BUTTON, self.OnButtonOpenInstallDir, self.button_open_install_dir)
-        self.Bind(wx.EVT_CHECKBOX, self.OnCheckboxUpdate, self.checkbox_update)
         self.Bind(wx.EVT_BUTTON, self.OnButtonStart, self.button_start)
+        self.Bind(wx.EVT_CHECKBOX, self.OnCheckboxUpdate, self.checkbox_update)
 
+        self.text_ctrl_log.Hide()
         event_notify_frame = self
 
         EVT_EXEC_FINISHED(self, self.OnExecFinished)
@@ -396,8 +402,12 @@ class LauncherFrame(wx.Frame):
             event.Skip()
 
     def OnButtonToggleLog(self, event):
-        logging.info("Event handler 'OnButtonToggleLog' not implemented!")
-        event.Skip()
+        if self.text_ctrl_log.IsShown():
+            self.text_ctrl_log.Hide()
+            self.SetSize((700, 200))
+        else:
+            self.text_ctrl_log.Show()
+            self.SetSize((700, 500))
 
     def OnButtonUploadLog(self, event):
         logging.info("Event handler 'OnButtonUploadLog' not implemented!")
@@ -445,6 +455,7 @@ class LauncherFrame(wx.Frame):
     def OnLogLine(self, event):
         if event.data:
             logging.info(event.data)
+            self.text_ctrl_log.write(event.data + '\n')
 
 class BARLauncher(wx.App):
     def OnInit(self):
