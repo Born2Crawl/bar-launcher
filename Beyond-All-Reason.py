@@ -80,16 +80,19 @@ class PlatformManager():
             '7zip': '7z_win64.exe',
             'pr_downloader': 'pr-downloader.exe',
             'spring': 'spring.exe',
+            'file_manager': ['explorer'],
         },
         'Linux': {
             '7zip': '7zz_linux_x86-64',
             'pr_downloader': 'pr-downloader',
             'spring': 'spring',
+            'file_manager': ['xdg-open'],
         },
         'Darwin': {
             '7zip': '7zz_macos',
             'pr_downloader': 'pr-downloader-mac',
             'spring': 'spring',
+            'file_manager': ['open', '-R'],
         },
     }
 
@@ -98,6 +101,7 @@ class PlatformManager():
     pr_downloader_bin = platform_binaries[current_platform]['pr_downloader']
     pr_downloader_path = file_manager.join_path(current_dir, 'bin', pr_downloader_bin)
     spring_bin = platform_binaries[current_platform]['spring']
+    file_manager_command = platform_binaries[current_platform]['file_manager']
 
 platform_manager = PlatformManager()
 
@@ -414,7 +418,11 @@ class LauncherFrame(wx.Frame):
         event.Skip()
 
     def OnButtonOpenInstallDir(self, event):
-        logging.info("Event handler 'OnButtonOpenInstallDir' not implemented!")
+        data_dir = file_manager.join_path(platform_manager.current_dir, 'data')
+        command = platform_manager.file_manager_command
+        command.append(data_dir)
+        if not process_starter.start_process(command):
+            logging.error(f'Couldn\'t open the install directory: {data_dir}')
         event.Skip()
 
     def OnCheckboxUpdate(self, event=None):
