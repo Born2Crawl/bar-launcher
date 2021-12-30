@@ -177,7 +177,7 @@ class ProcessStarter():
         logger.info('Starting a process:')
         logger.info(' '.join(command))
         try:
-            with subprocess.Popen(command, stdout=subprocess.PIPE) as proc: # , stderr=subprocess.PIPE, stdin=subprocess.PIPE
+            with subprocess.Popen(command, stdout=subprocess.PIPE) as proc:
                 while True:
                     line = proc.stdout.readline()
                     if not line:
@@ -650,5 +650,15 @@ class BARLauncher(wx.App):
         return True
 
 if __name__ == "__main__":
+    # Ugly workaround to hide a black console window on Windows (can't use "pyinstaller --noconsole" because it disables stdout completely)
+    if platform.system() == 'Windows':
+        if getattr(sys, 'frozen', False):
+            import ctypes
+
+            whnd = ctypes.windll.kernel32.GetConsoleWindow()
+            if whnd != 0:
+                ctypes.windll.user32.ShowWindow(whnd, 0)
+                ctypes.windll.kernel32.CloseHandle(whnd)
+
     BARLauncher = BARLauncher(0)
     BARLauncher.MainLoop()
