@@ -432,7 +432,7 @@ class LauncherFrame(wx.Frame):
 
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
-        self.SetSize((700, 200))
+        self.SetSize((700, 250))
         self.SetTitle("Beyond All Reason")
 
         self.panel_main = wx.Panel(self, wx.ID_ANY)
@@ -442,20 +442,23 @@ class LauncherFrame(wx.Frame):
         sizer_top_horz = wx.BoxSizer(wx.HORIZONTAL)
         sizer_main_vert.Add(sizer_top_horz, 0, wx.ALL | wx.EXPAND, 4)
 
-        label_title = wx.StaticText(self.panel_main, wx.ID_ANY, "Beyond All Reason")
-        label_title.SetFont(wx.Font(20, wx.FONTFAMILY_MODERN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        sizer_top_horz.Add(label_title, 0, 0, 0)
+        sizer_title = wx.BoxSizer(wx.VERTICAL)
+        sizer_top_horz.Add(sizer_title, 1, wx.EXPAND, 0)
 
-        sizer_top_horz.Add((20, 20), 1, wx.EXPAND, 0)
+        label_title = wx.StaticText(self.panel_main, wx.ID_ANY, "Beyond All Reason")
+        label_title.SetFont(wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+        sizer_title.Add(label_title, 0, wx.ALL, 4)
+
+        sizer_top_horz.Add((20, 80), 1, wx.ALL | wx.EXPAND, 2)
 
         sizer_config = wx.BoxSizer(wx.VERTICAL)
         sizer_top_horz.Add(sizer_config, 0, wx.EXPAND, 0)
 
         label_config = wx.StaticText(self.panel_main, wx.ID_ANY, "Config:")
-        sizer_config.Add(label_config, 0, 0, 0)
+        sizer_config.Add(label_config, 0, wx.ALL, 2)
 
         self.combobox_config = wx.ComboBox(self.panel_main, wx.ID_ANY, choices=[], style=wx.CB_DROPDOWN | wx.CB_READONLY)
-        sizer_config.Add(self.combobox_config, 0, 0, 0)
+        sizer_config.Add(self.combobox_config, 0, wx.ALL, 2)
 
         sizer_bottom_horz = wx.BoxSizer(wx.HORIZONTAL)
         sizer_main_vert.Add(sizer_bottom_horz, 0, wx.ALL | wx.EXPAND, 4)
@@ -464,30 +467,28 @@ class LauncherFrame(wx.Frame):
         sizer_bottom_horz.Add(sizer_bottom_left_vert, 1, wx.EXPAND, 0)
 
         sizer_log_buttonz_horz = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_bottom_left_vert.Add(sizer_log_buttonz_horz, 1, wx.EXPAND, 0)
+        sizer_bottom_left_vert.Add(sizer_log_buttonz_horz, 0, wx.EXPAND, 0)
 
         self.button_log_toggle = wx.Button(self.panel_main, wx.ID_ANY, "Toggle Log")
-        sizer_log_buttonz_horz.Add(self.button_log_toggle, 0, 0, 0)
+        sizer_log_buttonz_horz.Add(self.button_log_toggle, 0, wx.ALL, 2)
 
         self.button_log_upload = wx.Button(self.panel_main, wx.ID_ANY, "Upload Log")
-        sizer_log_buttonz_horz.Add(self.button_log_upload, 0, 0, 0)
+        sizer_log_buttonz_horz.Add(self.button_log_upload, 0, wx.ALL, 2)
 
         self.button_open_install_dir = wx.Button(self.panel_main, wx.ID_ANY, "Open Install Directory")
-        sizer_log_buttonz_horz.Add(self.button_open_install_dir, 0, 0, 0)
+        sizer_log_buttonz_horz.Add(self.button_open_install_dir, 0, wx.ALL, 2)
 
-        self.label_update_status = wx.StaticText(self.panel_main, wx.ID_ANY, "Ready")
-        sizer_bottom_left_vert.Add(self.label_update_status, 0, 0, 0)
+        label_update_status = wx.StaticText(self.panel_main, wx.ID_ANY, "Ready")
+        sizer_bottom_left_vert.Add(label_update_status, 0, wx.ALL, 2)
 
         self.gauge_update_current = wx.Gauge(self.panel_main, wx.ID_ANY, 10)
         self.gauge_update_current.SetMinSize((550, 15))
-        sizer_bottom_left_vert.Add(self.gauge_update_current, 0, wx.EXPAND, 0)
+        sizer_bottom_left_vert.Add(self.gauge_update_current, 0, wx.ALL | wx.EXPAND, 2)
 
         self.gauge_update_total = wx.Gauge(self.panel_main, wx.ID_ANY, 10)
-        sizer_bottom_left_vert.Add(self.gauge_update_total, 0, wx.EXPAND, 0)
+        sizer_bottom_left_vert.Add(self.gauge_update_total, 0, wx.ALL | wx.EXPAND, 2)
 
-        sizer_bottom_left_vert.Add((20, 20), 0, 0, 0)
-
-        sizer_bottom_horz.Add((20, 20), 0, 0, 0)
+        sizer_bottom_horz.Add((20, 80), 0, wx.ALL, 2)
 
         sizer_bottom_right_vert = wx.BoxSizer(wx.VERTICAL)
         sizer_bottom_horz.Add(sizer_bottom_right_vert, 0, 0, 0)
@@ -495,10 +496,12 @@ class LauncherFrame(wx.Frame):
         self.button_start = wx.Button(self.panel_main, wx.ID_ANY, "Start")
         self.button_start.SetMinSize((120, 60))
         self.button_start.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, 0, ""))
-        sizer_bottom_right_vert.Add(self.button_start, 0, 0, 0)
+        sizer_bottom_right_vert.Add(self.button_start, 0, wx.ALL, 2)
 
         self.checkbox_update = wx.CheckBox(self.panel_main, wx.ID_ANY, "Update")
-        sizer_bottom_right_vert.Add(self.checkbox_update, 0, 0, 0)
+        sizer_bottom_right_vert.Add(self.checkbox_update, 0, wx.ALL, 2)
+
+        sizer_main_vert.Add((80, 10), 0, wx.ALL, 2)
 
         self.text_ctrl_log = wx.TextCtrl(self.panel_main, wx.ID_ANY, "", style=wx.TE_DONTWRAP | wx.TE_MULTILINE | wx.TE_READONLY)
         sizer_main_vert.Add(self.text_ctrl_log, 1, wx.ALL | wx.EXPAND, 4)
@@ -507,6 +510,8 @@ class LauncherFrame(wx.Frame):
 
         self.Layout()
         self.Centre()
+        #self.Restore()
+        #self.Raise()
 
         self.Bind(wx.EVT_COMBOBOX, self.OnComboboxConfig, self.combobox_config)
         self.Bind(wx.EVT_BUTTON, self.OnButtonToggleLog, self.button_log_toggle)
@@ -538,7 +543,7 @@ class LauncherFrame(wx.Frame):
     def OnButtonToggleLog(self, event):
         if self.text_ctrl_log.IsShown():
             self.text_ctrl_log.Hide()
-            self.SetSize((700, 200))
+            self.SetSize((700, 250))
         else:
             self.text_ctrl_log.Show()
             self.SetSize((700, 500))
