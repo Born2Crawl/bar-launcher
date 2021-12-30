@@ -25,7 +25,7 @@ config_url = 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/ma
 event_notify_frame = None # global variable for a window to send all events to
 
 # Custom event to notify about Update/Start execution finished
-EVT_EXEC_FINISHED_ID = wx.NewIdRef(count=1)
+EVT_EXEC_FINISHED_ID = int(wx.NewIdRef(count=1))
 
 def EVT_EXEC_FINISHED(win, func):
     win.Connect(-1, -1, EVT_EXEC_FINISHED_ID, func)
@@ -36,8 +36,20 @@ class ExecFinishedEvent(wx.PyEvent):
         self.SetEventType(EVT_EXEC_FINISHED_ID)
         self.data = data
 
+# Custom event to notify about log upload finished
+EVT_LOG_UPLOADED_ID = int(wx.NewIdRef(count=1))
+
+def EVT_LOG_UPLOADED(win, func):
+    win.Connect(-1, -1, EVT_LOG_UPLOADED_ID, func)
+
+class LogUploadedEvent(wx.PyEvent):
+    def __init__(self, data):
+        wx.PyEvent.__init__(self)
+        self.SetEventType(EVT_LOG_UPLOADED_ID)
+        self.data = data
+
 # Custom event to catch logger messages and add them to text control
-EVT_LOGGER_MSG_ID = wx.NewIdRef(count=1)
+EVT_LOGGER_MSG_ID = int(wx.NewIdRef(count=1))
 
 def EVT_LOGGER_MSG(win, func):
     win.Connect(-1, -1, EVT_LOGGER_MSG_ID, func)
@@ -218,9 +230,22 @@ class PrDownloader():
 
 pr_downloader = PrDownloader()
 
-class S3Uploader():
-    def upload_file(self, file_name, bucket, object_name):
+# Thread class that executes logs upload
+class LogUploaderThread(Thread):
+    def __init__(self, file_name, bucket, object_name):
+        Thread.__init__(self)
+        self.file_name = file_name
+        self.bucket = bucket
+        self.object_name = object_name
+        self.start()
+
+    def run(self):
+        global event_notify_frame
         global logger
+
+        file_name = self.file_name
+        bucket = self.bucket
+        object_name = self.object_name
 
         try:
             resp = requests.get(f'{logs_url}c', allow_redirects=True)
@@ -233,14 +258,14 @@ class S3Uploader():
             logger.info(f'Uploading: "{file_name}" to: "{bucket}"')
             response = s3_client.upload_file(file_name, bucket, object_name, ExtraArgs={'ContentType': 'text/plain'})
             result = f'{logs_url}{object_name}'
+
+            wx.PostEvent(event_notify_frame, LogUploadedEvent(result))
         except:
             logger.error('Upload failed!')
             e = sys.exc_info()[1]
             logger.error(e)
-            return None
-        return result
 
-s3_uploader = S3Uploader()
+            wx.PostEvent(event_notify_frame, LogUploadedEvent(None))
 
 class ClipboardManager():
     def copy(self, text):
@@ -444,8 +469,8 @@ class LauncherFrame(wx.Frame):
         self.button_log_toggle = wx.Button(self.panel_main, wx.ID_ANY, "Toggle Log")
         sizer_log_buttonz_horz.Add(self.button_log_toggle, 0, 0, 0)
 
-        self.button_log_update = wx.Button(self.panel_main, wx.ID_ANY, "Upload Log")
-        sizer_log_buttonz_horz.Add(self.button_log_update, 0, 0, 0)
+        self.button_log_upload = wx.Button(self.panel_main, wx.ID_ANY, "Upload Log")
+        sizer_log_buttonz_horz.Add(self.button_log_upload, 0, 0, 0)
 
         self.button_open_install_dir = wx.Button(self.panel_main, wx.ID_ANY, "Open Install Directory")
         sizer_log_buttonz_horz.Add(self.button_open_install_dir, 0, 0, 0)
@@ -485,7 +510,7 @@ class LauncherFrame(wx.Frame):
 
         self.Bind(wx.EVT_COMBOBOX, self.OnComboboxConfig, self.combobox_config)
         self.Bind(wx.EVT_BUTTON, self.OnButtonToggleLog, self.button_log_toggle)
-        self.Bind(wx.EVT_BUTTON, self.OnButtonUploadLog, self.button_log_update)
+        self.Bind(wx.EVT_BUTTON, self.OnButtonUploadLog, self.button_log_upload)
         self.Bind(wx.EVT_BUTTON, self.OnButtonOpenInstallDir, self.button_open_install_dir)
         self.Bind(wx.EVT_BUTTON, self.OnButtonStart, self.button_start)
         self.Bind(wx.EVT_CHECKBOX, self.OnCheckboxUpdate, self.checkbox_update)
@@ -494,9 +519,11 @@ class LauncherFrame(wx.Frame):
         event_notify_frame = self
 
         EVT_EXEC_FINISHED(self, self.OnExecFinished)
+        EVT_LOG_UPLOADED(self, self.OnLogUploaded)
         EVT_LOGGER_MSG(self, self.OnLoggerMsg)
 
         self.updater_starter = None
+        self.log_uploader = None
 
     def OnComboboxConfig(self, event=None):
         config_manager.current_config = config_manager.compatible_configs[self.combobox_config.GetSelection()]
@@ -519,25 +546,22 @@ class LauncherFrame(wx.Frame):
     def OnButtonUploadLog(self, event):
         logger.info('Log upload requested')
 
-        dlg = wx.MessageDialog(self, f'Are you sure you want to upload the log to {logs_url}? Information like hardware configuration and game install path will be available to anyone you share the resulting URL with.', 'Warning', wx.YES_NO | wx.YES_DEFAULT | wx.ICON_EXCLAMATION)
-        result = dlg.ShowModal()
-        dlg.Destroy()
-
-        if result != wx.ID_YES:
-            logger.info('Log upload cancelled')
-            return
-
-        # File name to save as, with the current Unix timestamp for uniqueness
-        object_name = '{0}_{2}{1}'.format(*file_manager.split_extension(log_file_name) + (str(int(time.time() * 1000)),))
-        url = s3_uploader.upload_file(log_file_name, logs_bucket, object_name)
-        if url:
-            clipboard_manager.copy(url)
-
-            dlg = wx.MessageDialog(self, f'Log was uploaded to:\n{url}\n(URL is copied to clipboard now)', 'Information', wx.OK | wx.ICON_INFORMATION)
-            dlg.ShowModal()
+        if not self.log_uploader:
+            dlg = wx.MessageDialog(self, f'Are you sure you want to upload the log to {logs_url}? Information like hardware configuration and game install path will be available to anyone you share the resulting URL with.', 'Warning', wx.YES_NO | wx.YES_DEFAULT | wx.ICON_EXCLAMATION)
+            result = dlg.ShowModal()
             dlg.Destroy()
+
+            if result != wx.ID_YES:
+                logger.info('Log upload cancelled')
+                return
+
+            self.button_log_upload.Disable()
+
+            # File name to save as, with the current Unix timestamp for uniqueness
+            object_name = '{0}_{2}{1}'.format(*file_manager.split_extension(log_file_name) + (str(int(time.time() * 1000)),))
+            self.log_uploader = LogUploaderThread(log_file_name, logs_bucket, object_name)
         else:
-            logger.info('Log upload failed!')
+            logger.warning('Log upload process is already running!')
 
     def OnButtonOpenInstallDir(self, event):
         global logger
@@ -555,7 +579,6 @@ class LauncherFrame(wx.Frame):
             self.button_start.SetLabel('Start')
 
     def OnButtonStart(self, event):
-        global event_notify_frame
         global logger
 
         if not self.updater_starter:
@@ -581,6 +604,24 @@ class LauncherFrame(wx.Frame):
             logger.error('Process failed!')
 
         self.updater_starter = None
+
+    def OnLogUploaded(self, event):
+        global logger
+
+        self.button_log_upload.Enable()
+
+        if event.data:
+            logger.error('Log upload succeeded')
+            url = event.data
+            clipboard_manager.copy(url)
+
+            dlg = wx.MessageDialog(self, f'Log was uploaded to:\n{url}\n(URL is copied to clipboard now)', 'Information', wx.OK | wx.ICON_INFORMATION)
+            dlg.ShowModal()
+            dlg.Destroy()
+        else:
+            logger.error('Log upload failed!')
+
+        self.log_uploader = None
 
     def OnLoggerMsg(self, event):
         message = event.message.strip('\r')

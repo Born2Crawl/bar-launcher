@@ -102,7 +102,7 @@
                                         <object class="sizeritem">
                                             <option>0</option>
                                             <border>0</border>
-                                            <object class="wxButton" name="button_log_update" base="EditButton">
+                                            <object class="wxButton" name="button_log_upload" base="EditButton">
                                                 <events>
                                                     <handler event="EVT_BUTTON">OnButtonUploadLog</handler>
                                                 </events>
