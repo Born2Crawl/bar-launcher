@@ -8,6 +8,7 @@ import json
 import time
 import logging
 import platform
+import pyperclip
 import requests
 import subprocess
 from threading import *
@@ -128,21 +129,21 @@ class PlatformManager():
             'pr_downloader': 'pr-downloader.exe',
             'spring': 'spring.exe',
             'file_manager': ['explorer'],
-            'clipboard': 'clip.exe',
+            #'clipboard': 'clip.exe',
         },
         'Linux': {
             '7zip': '7zz_linux_x86-64',
             'pr_downloader': 'pr-downloader',
             'spring': 'spring',
             'file_manager': ['xdg-open'],
-            'clipboard': 'xclip -sel clip',
+            #'clipboard': 'xclip -sel clip',
         },
         'Darwin': {
             '7zip': '7zz_macos',
             'pr_downloader': 'pr-downloader-mac',
             'spring': 'spring',
             'file_manager': ['open', '-R'],
-            'clipboard': 'pbcopy',
+            #'clipboard': 'pbcopy',
         },
     }
 
@@ -152,7 +153,7 @@ class PlatformManager():
     pr_downloader_path = file_manager.join_path(current_dir, 'bin', pr_downloader_bin)
     spring_bin = platform_binaries[current_platform]['spring']
     file_manager_command = platform_binaries[current_platform]['file_manager']
-    clipboard_command = platform_binaries[current_platform]['clipboard']
+    #clipboard_command = platform_binaries[current_platform]['clipboard']
 
 platform_manager = PlatformManager()
 
@@ -247,7 +248,8 @@ class ClipboardManager():
 
         try:
             logger.info(f'Copying to clipboard: "{text}"')
-            subprocess.run(platform_manager.clipboard_command, universal_newlines=True, input=text)
+            pyperclip.copy(text)
+            #subprocess.run(platform_manager.clipboard_command, universal_newlines=True, input=text)
         except:
             logger.error('Copying failed:')
             e = sys.exc_info()[1]
