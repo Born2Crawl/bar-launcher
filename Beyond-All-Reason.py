@@ -5,22 +5,29 @@ import os
 import wx
 import sys
 import json
+import time
 import logging
 import platform
 import requests
 import subprocess
 from threading import *
 
-# Cutons events to notify about Update/Start execution finished and logging output
-event_notify_frame = None
+# AWS S3 upload
+import boto3
+from botocore.exceptions import ClientError
+
+logger = logging.getLogger()
+log_file_name = 'bar-launcher.log'
+logs_bucket = 'bar-infologs'
+logs_url = f'https://{logs_bucket}.s3.amazonaws.com/'
+
+event_notify_frame = None # global variable for a window to send all events to
+
+# Custom event to notify about Update/Start execution finished
 EVT_EXEC_FINISHED_ID = wx.NewIdRef(count=1)
-EVT_LOG_LINE_ID = wx.NewIdRef(count=1)
 
 def EVT_EXEC_FINISHED(win, func):
     win.Connect(-1, -1, EVT_EXEC_FINISHED_ID, func)
-
-def EVT_LOG_LINE(win, func):
-    win.Connect(-1, -1, EVT_LOG_LINE_ID, func)
 
 class ExecFinishedEvent(wx.PyEvent):
     def __init__(self, data):
@@ -28,11 +35,25 @@ class ExecFinishedEvent(wx.PyEvent):
         self.SetEventType(EVT_EXEC_FINISHED_ID)
         self.data = data
 
-class LogLineEvent(wx.PyEvent):
-    def __init__(self, data):
+# Custom event to catch logger messages and add them to text control
+EVT_LOGGER_MSG_ID = wx.NewIdRef(count=1)
+
+def EVT_LOGGER_MSG(win, func):
+    win.Connect(-1, -1, EVT_LOGGER_MSG_ID, func)
+
+class LoggerMsgEvent(wx.PyEvent):
+    def __init__(self, message, levelname):
         wx.PyEvent.__init__(self)
-        self.SetEventType(EVT_LOG_LINE_ID)
-        self.data = data
+        self.SetEventType(EVT_LOGGER_MSG_ID)
+        self.message = message
+        self.levelname = levelname
+
+# Custom logging handler to send logger events
+class LoggerToTextCtlHandler(logging.StreamHandler):
+    def emit(self, record):
+        message = self.format(record)
+        event = LoggerMsgEvent(message=message, levelname=record.levelname)
+        wx.PostEvent(event_notify_frame, event)
 
 class FileManager():
     def get_current_dir(self):
@@ -44,6 +65,9 @@ class FileManager():
     def join_path(self, *args):
         return os.path.join(*args)
 
+    def split_extension(self, path):
+        return os.path.splitext(path)
+
     def file_exists(self, path):
         return os.path.isfile(path)
 
@@ -54,20 +78,24 @@ class FileManager():
         return os.makedirs(path, exist_ok=True)
 
     def rename(self, current_path, new_path):
+        global logger
+
         try:
             return os.rename(current_path, new_path)
         except:
-            logging.error('Couldn\'t rename!')
+            logger.error('Couldn\'t rename!')
             e = sys.exc_info()[1]
-            logging.error(e)
+            logger.error(e)
 
     def remove(self, path):
+        global logger
+
         try:
             return os.remove(path)
         except:
-            logging.error('Couldn\'t remove!')
+            logger.error('Couldn\'t remove!')
             e = sys.exc_info()[1]
-            logging.error(e)
+            logger.error(e)
 
 file_manager = FileManager()
 
@@ -81,18 +109,21 @@ class PlatformManager():
             'pr_downloader': 'pr-downloader.exe',
             'spring': 'spring.exe',
             'file_manager': ['explorer'],
+            'clipboard': 'clip.exe',
         },
         'Linux': {
             '7zip': '7zz_linux_x86-64',
             'pr_downloader': 'pr-downloader',
             'spring': 'spring',
             'file_manager': ['xdg-open'],
+            'clipboard': 'xclip -sel clip',
         },
         'Darwin': {
             '7zip': '7zz_macos',
             'pr_downloader': 'pr-downloader-mac',
             'spring': 'spring',
             'file_manager': ['open', '-R'],
+            'clipboard': 'pbcopy',
         },
     }
 
@@ -102,34 +133,39 @@ class PlatformManager():
     pr_downloader_path = file_manager.join_path(current_dir, 'bin', pr_downloader_bin)
     spring_bin = platform_binaries[current_platform]['spring']
     file_manager_command = platform_binaries[current_platform]['file_manager']
+    clipboard_command = platform_binaries[current_platform]['clipboard']
 
 platform_manager = PlatformManager()
 
 class ProcessStarter():
     def start_process(self, command):
         global event_notify_frame
+        global logger
 
-        logging.info('Starting a process:')
-        logging.info(' '.join(command))
+        logger.info('Starting a process:')
+        logger.info(' '.join(command))
         try:
             with subprocess.Popen(command, stdout=subprocess.PIPE) as proc:
                 while True:
                     line = proc.stdout.readline()
                     if not line:
                         break
-                    wx.PostEvent(event_notify_frame, LogLineEvent(line.rstrip().decode('utf-8')))
-            return True
+                    if len(line.rstrip()) > 0:
+                        logger.info(line.rstrip().decode('utf-8'))
         except:
-            logging.error('Process start failed!')
+            logger.error('Process start failed!')
             e = sys.exc_info()[1]
-            logging.error(e)
+            logger.error(e)
             return False
+        return True
 
 process_starter = ProcessStarter()
 
 class ArchiveExtractor():
     def extract_7zip(self, archive_name, destination):
-        logging.info(f'Extracting archive: "{archive_name}" "{destination}"')
+        global logger
+
+        logger.info(f'Extracting archive: "{archive_name}" "{destination}"')
         command = [platform_manager.zip_path, 'x', archive_name, '-y', f'-o{destination}']
         return process_starter.start_process(command)
 
@@ -137,26 +173,70 @@ archive_extractor = ArchiveExtractor()
 
 class HttpDownloader():
     def download_file(self, source_url, target_file):
-        logging.info(f'Downloading: "{source_url}" to: "{target_file}"')
+        global logger
+
+        logger.info(f'Downloading: "{source_url}" to: "{target_file}"')
         try:
             r = requests.get(source_url, allow_redirects=True)
             open(target_file, 'wb').write(r.content)
         except:
-            logging.error('Download failed:')
+            logger.error('Download failed:')
             e = sys.exc_info()[1]
-            logging.error(e)
+            logger.error(e)
             return False
-
         return True
 
 http_downloader = HttpDownloader()
 
 class PrDownloader():
     def download_game(self, data_dir, game_name):
+        global logger
+
+        logger.info(f'Downloading: "{game_name}" to: "{data_dir}"')
         command = [platform_manager.pr_downloader_path, '--filesystem-writepath', data_dir, '--download-game', game_name]
         return process_starter.start_process(command)
 
 pr_downloader = PrDownloader()
+
+class S3Uploader():
+    def upload_file(self, file_name, bucket, object_name):
+        global logger
+
+        try:
+            resp = requests.get(f'{logs_url}c', allow_redirects=True)
+            c = resp.json()
+            s3_client = boto3.client(
+                's3',
+                aws_access_key_id=c['access_key_id'],
+                aws_secret_access_key=c['secret_access_key']
+            )
+            logger.info(f'Uploading: "{file_name}" to: "{bucket}"')
+            response = s3_client.upload_file(file_name, bucket, object_name, ExtraArgs={'ContentType': 'text/plain'})
+            result = f'{logs_url}{object_name}'
+        except:
+            logger.error('Upload failed!')
+            e = sys.exc_info()[1]
+            logger.error(e)
+            return None
+        return result
+
+s3_uploader = S3Uploader()
+
+class ClipboardManager():
+    def copy(self, text):
+        global logger
+
+        try:
+            logger.info(f'Copying to clipboard: "{text}"')
+            subprocess.run(platform_manager.clipboard_command, universal_newlines=True, input=text)
+        except:
+            logger.error('Copying failed:')
+            e = sys.exc_info()[1]
+            logger.error(e)
+            return False
+        return True
+
+clipboard_manager = ClipboardManager()
 
 class ConfigManager():
     compatible_configs = []
@@ -166,14 +246,16 @@ class ConfigManager():
         self.compatible_configs = self.get_compatible_configs()
 
     def read_config(self):
+        global logger
+
         config_url = 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json'
         config_path = file_manager.join_path(platform_manager.current_dir, 'config.json')
 
         if not file_manager.file_exists(config_path):
-            logging.info(f'Config file not found, downloading one from {config_url}')
+            logger.info(f'Config file not found, downloading one from {config_url}')
             http_downloader.download_file(config_url, config_path)
 
-        logging.info(f'Reading the config file from {config_path}')
+        logger.info(f'Reading the config file from {config_path}')
         f = open(config_path)
         data = json.load(f)
         f.close()
@@ -216,6 +298,7 @@ class UpdaterStarterThread(Thread):
 
     def run(self):
         global event_notify_frame
+        global logger
 
         config = config_manager.current_config
 
@@ -235,17 +318,17 @@ class UpdaterStarterThread(Thread):
                         http_resources.update({resource['url']: resource})
 
                 for n in pr_downloader_games:
-                    logging.info('================================================================================')
+                    logger.info('================================================================================')
                     if not pr_downloader.download_game(self.data_dir, pr_downloader_games[n]):
                         raise Exception(f'Error updating {n}!')
 
                 for n in http_resources:
-                    logging.info('================================================================================')
+                    logger.info('================================================================================')
                     resource = http_resources[n]
                     destination = file_manager.join_path(self.data_dir, resource['destination'])
 
                     if file_manager.file_exists(destination) or file_manager.dir_exists(destination):
-                        logging.warning(f'"{destination}" already exists, skipping...')
+                        logger.warning(f'"{destination}" already exists, skipping...')
                         continue
 
                     url = resource['url']
@@ -256,26 +339,26 @@ class UpdaterStarterThread(Thread):
 
                     if is_extract:
                         if file_manager.file_exists(self.temp_archive_name):
-                            logging.info(f'Creating directories: "{destination}"')
+                            logger.info(f'Creating directories: "{destination}"')
                             file_manager.make_dirs(destination)
 
                             if not archive_extractor.extract_7zip(self.temp_archive_name, destination):
                                 raise Exception(f'Error extracting {self.temp_archive_name}!')
 
-                            logging.info(f'Removing a temp file: "{self.temp_archive_name}"')
+                            logger.info(f'Removing a temp file: "{self.temp_archive_name}"')
                             file_manager.remove(self.temp_archive_name)
                         else:
-                            logging.info('Downloaded file didn\'t exist!')
+                            logger.info('Downloaded file didn\'t exist!')
                     else:
                         if file_manager.file_exists(self.temp_archive_name):
                             destination_path = file_manager.get_dir_name(destination)
-                            logging.info(f'Creating directories: "{destination_path}"')
+                            logger.info(f'Creating directories: "{destination_path}"')
                             file_manager.make_dirs(destination_path)
 
-                            logging.info(f'Renaming a temp file: "{self.temp_archive_name}" to: "{destination}"')
+                            logger.info(f'Renaming a temp file: "{self.temp_archive_name}" to: "{destination}"')
                             file_manager.rename(self.temp_archive_name, destination)
                         else:
-                            logging.info('Downloaded file didn\'t exist!')
+                            logger.info('Downloaded file didn\'t exist!')
 
             # Starting the game
             start_args = config['launch']['start_args']
@@ -289,9 +372,9 @@ class UpdaterStarterThread(Thread):
 
             wx.PostEvent(event_notify_frame, ExecFinishedEvent(True))
         except:
-            logging.error('Error while updating/starting:')
+            logger.error('Error while updating/starting:')
             e = sys.exc_info()[1]
-            logging.error(e)
+            logger.error(e)
             wx.PostEvent(event_notify_frame, ExecFinishedEvent(False))
 
 class LauncherFrame(wx.Frame):
@@ -388,7 +471,7 @@ class LauncherFrame(wx.Frame):
         event_notify_frame = self
 
         EVT_EXEC_FINISHED(self, self.OnExecFinished)
-        EVT_LOG_LINE(self, self.OnLogLine)
+        EVT_LOGGER_MSG(self, self.OnLoggerMsg)
 
         self.updater_starter = None
 
@@ -402,9 +485,6 @@ class LauncherFrame(wx.Frame):
         self.checkbox_update.SetValue(not no_downloads)
         self.OnCheckboxUpdate()
 
-        if event:
-            event.Skip()
-
     def OnButtonToggleLog(self, event):
         if self.text_ctrl_log.IsShown():
             self.text_ctrl_log.Hide()
@@ -414,16 +494,36 @@ class LauncherFrame(wx.Frame):
             self.SetSize((700, 500))
 
     def OnButtonUploadLog(self, event):
-        logging.info("Event handler 'OnButtonUploadLog' not implemented!")
-        event.Skip()
+        logger.info('Log upload requested')
+
+        dlg = wx.MessageDialog(self, f'Are you sure you want to upload the log to {logs_url}? Information like hardware configuration and game install path will be available to anyone you share the resulting URL with.', 'Warning', wx.YES_NO | wx.YES_DEFAULT | wx.ICON_EXCLAMATION)
+        result = dlg.ShowModal()
+        dlg.Destroy()
+
+        if result != wx.ID_YES:
+            logger.info('Log upload cancelled')
+            return
+
+        # File name to save as, with the current Unix timestamp for uniqueness
+        object_name = '{0}_{2}{1}'.format(*file_manager.split_extension(log_file_name) + (str(int(time.time() * 1000)),))
+        url = s3_uploader.upload_file(log_file_name, logs_bucket, object_name)
+        if url:
+            clipboard_manager.copy(url)
+
+            dlg = wx.MessageDialog(self, f'Log was uploaded to:\n{url}\n(URL is copied to clipboard now)', 'Information', wx.OK | wx.ICON_INFORMATION)
+            dlg.ShowModal()
+            dlg.Destroy()
+        else:
+            logger.info('Log upload failed!')
 
     def OnButtonOpenInstallDir(self, event):
+        global logger
+
         data_dir = file_manager.join_path(platform_manager.current_dir, 'data')
         command = platform_manager.file_manager_command
         command.append(data_dir)
         if not process_starter.start_process(command):
-            logging.error(f'Couldn\'t open the install directory: {data_dir}')
-        event.Skip()
+            logger.error(f'Couldn\'t open the install directory: {data_dir}')
 
     def OnCheckboxUpdate(self, event=None):
         if self.checkbox_update.IsChecked():
@@ -431,11 +531,9 @@ class LauncherFrame(wx.Frame):
         else:
             self.button_start.SetLabel('Start')
 
-        if event:
-            event.Skip()
-
     def OnButtonStart(self, event):
         global event_notify_frame
+        global logger
 
         if not self.updater_starter:
             self.button_start.Disable()
@@ -444,26 +542,26 @@ class LauncherFrame(wx.Frame):
 
             self.updater_starter = UpdaterStarterThread(self.checkbox_update.IsChecked())
         else:
-            logging.warning('Update/Start process is already running!')
-
-        event.Skip()
+            logger.warning('Update/Start process is already running!')
 
     def OnExecFinished(self, event):
+        global logger
+
         self.button_start.Enable()
         self.checkbox_update.Enable()
         self.combobox_config.Enable()
 
         if event.data:
-            logging.info('Start success!')
+            logger.info('Process finished successfully!')
         else:
-            logging.error('Start failed!')
+            logger.error('Process failed!')
 
         self.updater_starter = None
 
-    def OnLogLine(self, event):
-        if event.data:
-            logging.info(event.data)
-            self.text_ctrl_log.write(event.data + '\n')
+    def OnLoggerMsg(self, event):
+        message = event.message.strip('\r')+'\n'
+        self.text_ctrl_log.AppendText(message)
+        event.Skip()
 
 class BARLauncher(wx.App):
     def OnInit(self):
@@ -477,11 +575,28 @@ class BARLauncher(wx.App):
 
         self.SetTopWindow(self.frame_launcher)
         self.frame_launcher.Show()
+
+        logger.info('BAR Launcher started')
+
         return True
 
 if __name__ == "__main__":
-    logging.basicConfig(filename='bar-launcher.log', encoding='utf-8', level=logging.DEBUG)
-    logging.getLogger().setLevel(logging.DEBUG)
+    log_formatter_short = logging.Formatter('%(message)s')
+    log_formatter_long = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+
+    log_console_handler = logging.StreamHandler(sys.stdout)
+    log_console_handler.setFormatter(log_formatter_short)
+    logger.addHandler(log_console_handler)
+
+    log_text_ctl_handler = LoggerToTextCtlHandler()
+    log_text_ctl_handler.setFormatter(log_formatter_short)
+    logger.addHandler(log_text_ctl_handler)
+
+    log_file_handler = logging.FileHandler(log_file_name, mode='w')
+    log_file_handler.setFormatter(log_formatter_long)
+    logger.addHandler(log_file_handler)
+
+    logger.setLevel(logging.INFO)
 
     BARLauncher = BARLauncher(0)
     BARLauncher.MainLoop()
