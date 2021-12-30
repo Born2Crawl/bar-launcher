@@ -16,10 +16,10 @@ from threading import *
 import boto3
 from botocore.exceptions import ClientError
 
-logger = logging.getLogger()
 log_file_name = 'bar-launcher.log'
 logs_bucket = 'bar-infologs'
 logs_url = f'https://{logs_bucket}.s3.amazonaws.com/'
+config_url = 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json'
 
 event_notify_frame = None # global variable for a window to send all events to
 
@@ -53,7 +53,26 @@ class LoggerToTextCtlHandler(logging.StreamHandler):
     def emit(self, record):
         message = self.format(record)
         event = LoggerMsgEvent(message=message, levelname=record.levelname)
-        wx.PostEvent(event_notify_frame, event)
+        if event_notify_frame:
+            wx.PostEvent(event_notify_frame, event)
+
+logger = logging.getLogger()
+log_formatter_short = logging.Formatter('%(message)s')
+log_formatter_long = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+
+log_console_handler = logging.StreamHandler(sys.stdout)
+log_console_handler.setFormatter(log_formatter_short)
+logger.addHandler(log_console_handler)
+
+log_text_ctl_handler = LoggerToTextCtlHandler()
+log_text_ctl_handler.setFormatter(log_formatter_short)
+logger.addHandler(log_text_ctl_handler)
+
+log_file_handler = logging.FileHandler(log_file_name, mode='w')
+log_file_handler.setFormatter(log_formatter_long)
+logger.addHandler(log_file_handler)
+
+logger.setLevel(logging.INFO)
 
 class FileManager():
     def get_current_dir(self):
@@ -248,7 +267,6 @@ class ConfigManager():
     def read_config(self):
         global logger
 
-        config_url = 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json'
         config_path = file_manager.join_path(platform_manager.current_dir, 'config.json')
 
         if not file_manager.file_exists(config_path):
@@ -581,22 +599,5 @@ class BARLauncher(wx.App):
         return True
 
 if __name__ == "__main__":
-    log_formatter_short = logging.Formatter('%(message)s')
-    log_formatter_long = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-
-    log_console_handler = logging.StreamHandler(sys.stdout)
-    log_console_handler.setFormatter(log_formatter_short)
-    logger.addHandler(log_console_handler)
-
-    log_text_ctl_handler = LoggerToTextCtlHandler()
-    log_text_ctl_handler.setFormatter(log_formatter_short)
-    logger.addHandler(log_text_ctl_handler)
-
-    log_file_handler = logging.FileHandler(log_file_name, mode='w')
-    log_file_handler.setFormatter(log_formatter_long)
-    logger.addHandler(log_file_handler)
-
-    logger.setLevel(logging.INFO)
-
     BARLauncher = BARLauncher(0)
     BARLauncher.MainLoop()
