@@ -125,7 +125,7 @@
                                     <option>0</option>
                                     <border>0</border>
                                     <object class="wxStaticText" name="label_update_status" base="EditStaticText">
-                                        <label>Status</label>
+                                        <label>Ready</label>
                                     </object>
                                 </object>
                                 <object class="sizeritem">

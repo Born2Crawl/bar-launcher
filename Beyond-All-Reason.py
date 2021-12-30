@@ -335,11 +335,13 @@ class UpdaterStarterThread(Thread):
                     for resource in config['downloads']['resources']:
                         http_resources.update({resource['url']: resource})
 
+                logger.info('Step 1: Downloading the game repositories')
                 for n in pr_downloader_games:
                     logger.info('================================================================================')
                     if not pr_downloader.download_game(self.data_dir, pr_downloader_games[n]):
                         raise Exception(f'Error updating {n}!')
 
+                logger.info('Step 2: Downloading the engine and additional resources')
                 for n in http_resources:
                     logger.info('================================================================================')
                     resource = http_resources[n]
@@ -378,6 +380,7 @@ class UpdaterStarterThread(Thread):
                         else:
                             logger.info('Downloaded file didn\'t exist!')
 
+            logger.info('Step 3: Starting the game')
             # Starting the game
             start_args = config['launch']['start_args']
             engine = config['launch']['engine']
@@ -445,8 +448,8 @@ class LauncherFrame(wx.Frame):
         self.button_open_install_dir = wx.Button(self.panel_main, wx.ID_ANY, "Open Install Directory")
         sizer_log_buttonz_horz.Add(self.button_open_install_dir, 0, 0, 0)
 
-        label_update_status = wx.StaticText(self.panel_main, wx.ID_ANY, "Status")
-        sizer_bottom_left_vert.Add(label_update_status, 0, 0, 0)
+        self.label_update_status = wx.StaticText(self.panel_main, wx.ID_ANY, "Ready")
+        sizer_bottom_left_vert.Add(self.label_update_status, 0, 0, 0)
 
         self.gauge_update_current = wx.Gauge(self.panel_main, wx.ID_ANY, 10)
         self.gauge_update_current.SetMinSize((550, 15))
@@ -565,6 +568,7 @@ class LauncherFrame(wx.Frame):
     def OnExecFinished(self, event):
         global logger
 
+        self.label_update_status.SetLabel('Ready')
         self.button_start.Enable()
         self.checkbox_update.Enable()
         self.combobox_config.Enable()
@@ -577,8 +581,10 @@ class LauncherFrame(wx.Frame):
         self.updater_starter = None
 
     def OnLoggerMsg(self, event):
-        message = event.message.strip('\r')+'\n'
-        self.text_ctrl_log.AppendText(message)
+        message = event.message.strip('\r')
+        if message.startswith('Step'):
+            self.label_update_status.SetLabel(message)
+        self.text_ctrl_log.AppendText(message+'\n')
         event.Skip()
 
 class BARLauncher(wx.App):
