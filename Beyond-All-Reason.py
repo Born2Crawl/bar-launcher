@@ -164,7 +164,7 @@ class ProcessStarter():
         logger.info('Starting a process:')
         logger.info(' '.join(command))
         try:
-            with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE) as proc:
+            with subprocess.Popen(command, stdout=subprocess.PIPE) as proc: # , stderr=subprocess.PIPE, stdin=subprocess.PIPE
                 while True:
                     line = proc.stdout.readline()
                     if not line:
