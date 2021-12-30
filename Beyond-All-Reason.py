@@ -546,6 +546,8 @@ class LauncherFrame(wx.Frame):
     def OnButtonUploadLog(self, event):
         logger.info('Log upload requested')
 
+        self.button_log_upload.Disable()
+
         if not self.log_uploader:
             dlg = wx.MessageDialog(self, f'Are you sure you want to upload the log to {logs_url}? Information like hardware configuration and game install path will be available to anyone you share the resulting URL with.', 'Warning', wx.YES_NO | wx.YES_DEFAULT | wx.ICON_EXCLAMATION)
             result = dlg.ShowModal()
@@ -553,10 +555,10 @@ class LauncherFrame(wx.Frame):
 
             if result != wx.ID_YES:
                 logger.info('Log upload cancelled')
+                self.button_log_upload.Enable()
                 return
 
-            self.button_log_upload.Disable()
-
+            logger.info('Uploading, please wait...')
             # File name to save as, with the current Unix timestamp for uniqueness
             object_name = '{0}_{2}{1}'.format(*file_manager.split_extension(log_file_name) + (str(int(time.time() * 1000)),))
             self.log_uploader = LogUploaderThread(log_file_name, logs_bucket, object_name)
