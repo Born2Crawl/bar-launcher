@@ -1,7 +1,6 @@
 # BAR data
 data/*
-# Except Chobby config
-!data/chobby_config.json
+config.json
 
 # BAR executables
 Beyond-All-Reason
