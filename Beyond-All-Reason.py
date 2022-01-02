@@ -761,9 +761,11 @@ class BARLauncher(wx.App):
 
         #self.config_manager = ConfigManager()
         self.frame_launcher.combobox_config.Clear()
-        self.frame_launcher.combobox_config.Append(config_manager.get_compatible_configs_names())
-        self.frame_launcher.combobox_config.SetSelection(0)
-        self.frame_launcher.OnComboboxConfig()
+        config_names = config_manager.get_compatible_configs_names()
+        if len(config_names) > 0:
+            self.frame_launcher.combobox_config.Append(config_names)
+            self.frame_launcher.combobox_config.SetSelection(0)
+            self.frame_launcher.OnComboboxConfig()
 
         self.SetTopWindow(self.frame_launcher)
         self.frame_launcher.Show()
