@@ -171,7 +171,7 @@ class PlatformManager():
                 'command': ['7z_win64.exe'],
                 'path': 'bin',
                 'downloads': [
-                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/7z_win64.exe'
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/7z_win64.exe',
                 ],
             },
             'pr_downloader': {
@@ -195,14 +195,14 @@ class PlatformManager():
                 'command': ['7zz_linux_x86-64'],
                 'path': 'bin',
                 'downloads': [
-                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/7zz_linux_x86-64'
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/7zz_linux_x86-64',
                 ],
             },
             'pr_downloader': {
                 'command': ['pr-downloader'],
                 'path': 'bin',
                 'downloads': [
-                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/pr-downloader'
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/pr-downloader',
                 ],
             },
             'spring': {
@@ -217,14 +217,17 @@ class PlatformManager():
                 'command': ['7zz_macos'],
                 'path': 'bin',
                 'downloads': [
-                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/7zz_macos'
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/7zz_macos',
                 ],
             },
             'pr_downloader': {
                 'command': ['pr-downloader-mac'],
                 'path': 'bin',
                 'downloads': [
-                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/pr-downloader-mac'
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/pr-downloader-mac',
+                    # These need to go to ../lib/
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/libminizip.1.dylib',
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/libstdc++.6.dylib',
                 ],
             },
             'spring': {
