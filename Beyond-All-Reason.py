@@ -5,12 +5,14 @@ import os
 import wx
 import sys
 import json
+import stat
 import time
 import logging
 import platform
 import pyperclip
 import requests
 import subprocess
+from urllib.parse import urlparse
 from threading import *
 
 # AWS S3 upload
@@ -20,7 +22,6 @@ from botocore.exceptions import ClientError
 log_file_name = 'bar-launcher.log'
 logs_bucket = 'bar-infologs'
 logs_url = f'https://{logs_bucket}.s3.amazonaws.com/'
-config_url = 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json'
 
 event_notify_frame = None # global variable for a window to send all events to
 
@@ -100,6 +101,9 @@ class FileManager():
     def split_extension(self, path):
         return os.path.splitext(path)
 
+    def extract_filename(self, path):
+        return os.path.basename(path)
+
     def file_exists(self, path):
         return os.path.isfile(path)
 
@@ -134,38 +138,134 @@ file_manager = FileManager()
 class PlatformManager():
     current_platform = platform.system()
     current_dir = file_manager.get_current_dir()
+    data_dir = file_manager.join_path(current_dir, 'data')
+    executable_dir = file_manager.join_path(current_dir, 'bin')
 
-    platform_binaries = {
-        'Windows': {
-            '7zip': '7z_win64.exe',
-            'pr_downloader': 'pr-downloader.exe',
-            'spring': 'spring.exe',
-            'file_manager': ['explorer'],
-            #'clipboard': 'clip.exe',
+    config_files = {
+        'launcher': {
+            'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json',
+            'path': file_manager.join_path(current_dir, 'config.json'),
         },
-        'Linux': {
-            '7zip': '7zz_linux_x86-64',
-            'pr_downloader': 'pr-downloader',
-            'spring': 'spring',
-            'file_manager': ['xdg-open'],
-            #'clipboard': 'xclip -sel clip',
-        },
-        'Darwin': {
-            '7zip': '7zz_macos',
-            'pr_downloader': 'pr-downloader-mac',
-            'spring': 'spring',
-            'file_manager': ['open', '-R'],
-            #'clipboard': 'pbcopy',
+        'lobby': {
+            'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/files/chobby_config.json',
+            'path': file_manager.join_path(data_dir, 'chobby_config.json'),
         },
     }
 
-    zip_bin = platform_binaries[current_platform]['7zip']
-    zip_path = file_manager.join_path(current_dir, 'bin', zip_bin)
-    pr_downloader_bin = platform_binaries[current_platform]['pr_downloader']
-    pr_downloader_path = file_manager.join_path(current_dir, 'bin', pr_downloader_bin)
-    spring_bin = platform_binaries[current_platform]['spring']
-    file_manager_command = platform_binaries[current_platform]['file_manager']
-    #clipboard_command = platform_binaries[current_platform]['clipboard']
+    def get_config_path(self, name):
+        return self.config_files[name]['path']
+
+    def get_config_url(self, name):
+        return self.config_files[name]['url']
+
+    def download_config(self, name):
+        config_path = self.get_config_path(name)
+        config_url = self.get_config_url(name)
+
+        logger.info(f'Trying to download a fresh {name} config from {config_url}')
+        http_downloader.download_file(config_url, config_path)
+
+    platform_binaries = {
+        'Windows': {
+            '7zip': {
+                'command': ['7z_win64.exe'],
+                'path': 'bin',
+                'downloads': [
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/7z_win64.exe'
+                ],
+            },
+            'pr_downloader': {
+                'command': ['pr-downloader.exe'],
+                'path': 'bin',
+                'downloads': [
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/pr-downloader.exe',
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/libcurl.dll',
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/zlib1.dll',
+                ],
+            },
+            'spring': {
+                'command': ['spring.exe'],
+            },
+            'file_manager': {
+                'command': ['explorer'],
+            },
+        },
+        'Linux': {
+            '7zip': {
+                'command': ['7zz_linux_x86-64'],
+                'path': 'bin',
+                'downloads': [
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/7zz_linux_x86-64'
+                ],
+            },
+            'pr_downloader': {
+                'command': ['pr-downloader'],
+                'path': 'bin',
+                'downloads': [
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/pr-downloader'
+                ],
+            },
+            'spring': {
+                'command': ['spring'],
+            },
+            'file_manager': {
+                'command': ['xdg-open'],
+            },
+        },
+        'Darwin': {
+            '7zip': {
+                'command': ['7zz_macos'],
+                'path': 'bin',
+                'downloads': [
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/7zz_macos'
+                ],
+            },
+            'pr_downloader': {
+                'command': ['pr-downloader-mac'],
+                'path': 'bin',
+                'downloads': [
+                    'https://github.com/Born2Crawl/bar-launcher/raw/main/bin/pr-downloader-mac'
+                ],
+            },
+            'spring': {
+                'command': ['spring'],
+            },
+            'file_manager': {
+                'command': ['open', '-R'],
+            },
+        },
+    }
+
+    def get_executable_command(self, name):
+        current_platform = self.current_platform
+        current_dir = self.current_dir
+
+        command = list(self.platform_binaries[current_platform][name]['command'])
+        if 'path' in self.platform_binaries[current_platform][name]:
+            command[0] = file_manager.join_path(current_dir, self.platform_binaries[current_platform][name]['path'], command[0])
+
+        return command
+
+    def download_executable(self, name):
+        current_platform = self.current_platform
+        executable_dir = self.executable_dir
+
+        if not 'downloads' in self.platform_binaries[current_platform][name]:
+            return
+
+        command = self.get_executable_command(name)
+        executable = command[0]
+
+        if not file_manager.file_exists(executable):
+            logger.warning(f'Executable wasn\'t found in: {executable}')
+            logger.info('Downloading executable files...')
+            file_manager.make_dirs(executable_dir)
+            for url in self.platform_binaries[current_platform][name]['downloads']:
+                if not http_downloader.download_file(url, executable_dir):
+                    raise Exception('Couldn\'t download the archive extractor!')
+            # Setting executable flag
+            st = os.stat(executable)
+            os.chmod(executable, st.st_mode | stat.S_IEXEC)
 
 platform_manager = PlatformManager()
 
@@ -189,6 +289,7 @@ class ProcessStarter():
             e = sys.exc_info()[1]
             logger.error(e)
             return False
+
         return True
 
 process_starter = ProcessStarter()
@@ -197,18 +298,27 @@ class ArchiveExtractor():
     def extract_7zip(self, archive_name, destination):
         global logger
 
+        platform_manager.download_executable('7zip')
+
+        zip_command = platform_manager.get_executable_command('7zip')
+        zip_executable = zip_command[0]
         logger.info(f'Extracting archive: "{archive_name}" "{destination}"')
-        command = [platform_manager.zip_path, 'x', archive_name, '-y', f'-o{destination}']
-        return process_starter.start_process(command)
+        zip_command.extend(['x', archive_name, '-y', f'-o{destination}'])
+        return process_starter.start_process(zip_command)
 
 archive_extractor = ArchiveExtractor()
 
 class HttpDownloader():
-    def download_file(self, source_url, target_file):
+    def download_file(self, source_url, target):
         global logger
 
-        logger.info(f'Downloading: "{source_url}" to: "{target_file}"')
+        logger.info(f'Downloading: "{source_url}" to: "{target}"')
         try:
+            if file_manager.dir_exists(target): # Target is a directory, adding a filename from the URL to it
+                target_file = file_manager.join_path(target, file_manager.extract_filename(urlparse(source_url).path))
+            else:
+                target_file = target
+
             r = requests.get(source_url, allow_redirects=True)
             open(target_file, 'wb').write(r.content)
         except:
@@ -224,8 +334,11 @@ class PrDownloader():
     def download_game(self, data_dir, game_name):
         global logger
 
+        platform_manager.download_executable('pr_downloader')
+
         logger.info(f'Downloading: "{game_name}" to: "{data_dir}"')
-        command = [platform_manager.pr_downloader_path, '--filesystem-writepath', data_dir, '--download-game', game_name]
+        command = platform_manager.get_executable_command('pr_downloader')
+        command.extend(['--filesystem-writepath', data_dir, '--download-game', game_name])
         return process_starter.start_process(command)
 
 pr_downloader = PrDownloader()
@@ -274,7 +387,6 @@ class ClipboardManager():
         try:
             logger.info(f'Copying to clipboard: "{text}"')
             pyperclip.copy(text)
-            #subprocess.run(platform_manager.clipboard_command, universal_newlines=True, input=text)
         except:
             logger.error('Copying failed:')
             e = sys.exc_info()[1]
@@ -294,14 +406,13 @@ class ConfigManager():
     def read_config(self):
         global logger
 
-        config_path = file_manager.join_path(platform_manager.current_dir, 'config.json')
+        platform_manager.download_config('launcher')
+        launcher_config_path = platform_manager.get_config_path('launcher')
+        if not file_manager.file_exists(launcher_config_path):
+            raise Exception('Couldn\'t find the config file to use!')
 
-        if not file_manager.file_exists(config_path):
-            logger.info(f'Config file not found, downloading one from {config_url}')
-            http_downloader.download_file(config_url, config_path)
-
-        logger.info(f'Reading the config file from {config_path}')
-        f = open(config_path)
+        logger.info(f'Reading the config file from {launcher_config_path}')
+        f = open(launcher_config_path)
         data = json.load(f)
         f.close()
         return data
@@ -333,7 +444,7 @@ config_manager = ConfigManager()
 
 # Thread class that executes Update/Start
 class UpdaterStarterThread(Thread):
-    data_dir = file_manager.join_path(platform_manager.current_dir, 'data')
+    data_dir = platform_manager.data_dir
     temp_archive_name = file_manager.join_path(data_dir, 'download.7z')
 
     def __init__(self, is_update):
@@ -407,17 +518,24 @@ class UpdaterStarterThread(Thread):
                         else:
                             logger.info('Downloaded file didn\'t exist!')
 
-            logger.info('Step 3: Starting the game')
+            logger.info('Step 3: Downloading the lobby config')
+            platform_manager.download_config('lobby')
+            lobby_config_path = platform_manager.get_config_path('lobby')
+            if not file_manager.file_exists(lobby_config_path):
+                raise Exception('Couldn\'t find the config file to use!')
+
+            logger.info('Step 4: Starting the game')
             # Starting the game
             start_args = config['launch']['start_args']
             engine = config['launch']['engine']
-            spring_path = file_manager.join_path(self.data_dir, 'engine', engine, platform_manager.spring_bin)
-
-            command = [spring_path, '--write-dir', self.data_dir, '--isolation']
-            command.extend(start_args)
-            if not process_starter.start_process(command):
+            spring_command = platform_manager.get_executable_command('spring')
+            spring_command[0] = file_manager.join_path(self.data_dir, 'engine', engine, spring_command[0])
+            spring_command.extend(['--write-dir', self.data_dir, '--isolation'])
+            spring_command.extend(start_args)
+            if not process_starter.start_process(spring_command):
                 raise Exception('Error starting the game!')
 
+            logger.info('Process finished!')
             wx.PostEvent(event_notify_frame, ExecFinishedEvent(True))
         except:
             logger.error('Error while updating/starting:')
@@ -478,8 +596,8 @@ class LauncherFrame(wx.Frame):
         self.button_open_install_dir = wx.Button(self.panel_main, wx.ID_ANY, "Open Install Directory")
         sizer_log_buttonz_horz.Add(self.button_open_install_dir, 0, wx.ALL, 2)
 
-        label_update_status = wx.StaticText(self.panel_main, wx.ID_ANY, "Ready")
-        sizer_bottom_left_vert.Add(label_update_status, 0, wx.ALL, 2)
+        self.label_update_status = wx.StaticText(self.panel_main, wx.ID_ANY, "Ready")
+        sizer_bottom_left_vert.Add(self.label_update_status, 0, wx.ALL, 2)
 
         self.gauge_update_current = wx.Gauge(self.panel_main, wx.ID_ANY, 10)
         self.gauge_update_current.SetMinSize((550, 15))
@@ -573,8 +691,8 @@ class LauncherFrame(wx.Frame):
     def OnButtonOpenInstallDir(self, event):
         global logger
 
-        data_dir = file_manager.join_path(platform_manager.current_dir, 'data')
-        command = list(platform_manager.file_manager_command) # Avoid mutating the original variable
+        data_dir = platform_manager.data_dir
+        command = platform_manager.get_executable_command('file_manager')
         command.append(data_dir)
         if not process_starter.start_process(command):
             logger.error(f'Couldn\'t open the install directory: {data_dir}')
@@ -606,9 +724,9 @@ class LauncherFrame(wx.Frame):
         self.combobox_config.Enable()
 
         if event.data:
-            logger.info('Process finished successfully!')
+            logger.info('Game finished successfully!')
         else:
-            logger.error('Process failed!')
+            logger.error('Game process failed!')
 
         self.updater_starter = None
 
