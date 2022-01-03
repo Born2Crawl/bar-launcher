@@ -614,6 +614,35 @@ class UpdaterStarterThread(Thread):
             if main_frame:
                 wx.PostEvent(main_frame, ExecFinishedEvent(False))
 
+
+class MainPanel(wx.Panel):
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent=parent)
+        self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
+        self.bg = wx.Image('resources/background.png', wx.BITMAP_TYPE_ANY)
+        self.proportion = self.bg.GetWidth() / self.bg.GetHeight()
+
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+
+    def OnSize(self, size):
+        self.Layout()
+        self.Refresh()
+
+    def OnPaint(self, evt):
+        dc = wx.BufferedPaintDC(self)
+        self.Draw(dc)
+
+    def Draw(self, dc):
+        client_width, client_height = self.GetClientSize()
+        if not client_width:
+            return
+
+        dc.Clear()
+        client_height = int(client_width / self.proportion)
+        scaled_background = self.bg.Scale(client_width, client_height, wx.IMAGE_QUALITY_BILINEAR)
+        dc.DrawBitmap(wx.Bitmap(scaled_background), 0, 0)
+
 class LauncherFrame(wx.Frame):
 
     def __init__(self, *args, **kwds):
@@ -621,10 +650,10 @@ class LauncherFrame(wx.Frame):
 
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
-        self.SetSize((700, 240))
+        self.SetSize((800, 380))
         self.SetTitle("Beyond All Reason")
 
-        self.panel_main = wx.Panel(self, wx.ID_ANY)
+        self.panel_main = MainPanel(self)
 
         sizer_main_vert = wx.BoxSizer(wx.VERTICAL)
 
@@ -638,7 +667,7 @@ class LauncherFrame(wx.Frame):
         label_title.SetFont(wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         sizer_title.Add(label_title, 0, wx.ALL, 4)
 
-        sizer_top_horz.Add((20, 80), 1, wx.ALL | wx.EXPAND, 2)
+        sizer_top_horz.Add((20, 200), 1, wx.ALL | wx.EXPAND, 2)
 
         sizer_config = wx.BoxSizer(wx.VERTICAL)
         sizer_top_horz.Add(sizer_config, 0, wx.EXPAND, 0)
@@ -647,10 +676,15 @@ class LauncherFrame(wx.Frame):
         sizer_config.Add(label_config, 0, wx.ALL, 2)
 
         self.combobox_config = wx.ComboBox(self.panel_main, wx.ID_ANY, choices=[], style=wx.CB_DROPDOWN | wx.CB_READONLY)
+        self.combobox_config.SetMinSize((120, 23))
         sizer_config.Add(self.combobox_config, 0, wx.ALL, 2)
+
+        sizer_top_horz.Add((20, 100), 0, 0, 0)
 
         sizer_bottom_horz = wx.BoxSizer(wx.HORIZONTAL)
         sizer_main_vert.Add(sizer_bottom_horz, 0, wx.ALL | wx.EXPAND, 4)
+
+        sizer_bottom_horz.Add((20, 100), 0, 0, 0)
 
         sizer_bottom_left_vert = wx.BoxSizer(wx.VERTICAL)
         sizer_bottom_horz.Add(sizer_bottom_left_vert, 1, wx.EXPAND, 0)
@@ -667,7 +701,7 @@ class LauncherFrame(wx.Frame):
         self.button_open_install_dir = wx.Button(self.panel_main, wx.ID_ANY, "Open Install Directory")
         sizer_log_buttonz_horz.Add(self.button_open_install_dir, 0, wx.ALL, 2)
 
-        sizer_bottom_left_vert.Add((80, 10), 0, wx.ALL, 2)
+        sizer_bottom_left_vert.Add((80, 20), 0, wx.ALL, 2)
 
         self.label_update_status = wx.StaticText(self.panel_main, wx.ID_ANY, "Ready")
         sizer_bottom_left_vert.Add(self.label_update_status, 0, wx.ALL, 2)
@@ -676,7 +710,7 @@ class LauncherFrame(wx.Frame):
         self.gauge_progress.SetMinSize((550, 15))
         sizer_bottom_left_vert.Add(self.gauge_progress, 0, wx.ALL | wx.EXPAND, 2)
 
-        sizer_bottom_horz.Add((20, 80), 0, wx.ALL, 2)
+        sizer_bottom_horz.Add((20, 100), 0, wx.ALL, 2)
 
         sizer_bottom_right_vert = wx.BoxSizer(wx.VERTICAL)
         sizer_bottom_horz.Add(sizer_bottom_right_vert, 0, 0, 0)
@@ -689,7 +723,9 @@ class LauncherFrame(wx.Frame):
         self.checkbox_update = wx.CheckBox(self.panel_main, wx.ID_ANY, "Update")
         sizer_bottom_right_vert.Add(self.checkbox_update, 0, wx.ALL, 2)
 
-        sizer_main_vert.Add((80, 10), 0, wx.ALL, 2)
+        sizer_bottom_horz.Add((20, 100), 0, 0, 0)
+
+        sizer_main_vert.Add((600, 20), 0, wx.ALL, 2)
 
         self.text_ctrl_log = wx.TextCtrl(self.panel_main, wx.ID_ANY, "", style=wx.TE_DONTWRAP | wx.TE_MULTILINE | wx.TE_READONLY)
         sizer_main_vert.Add(self.text_ctrl_log, 1, wx.ALL | wx.EXPAND, 4)
@@ -791,6 +827,20 @@ class LauncherFrame(wx.Frame):
         else:
             logger.warning('Update/Start process is already running!')
 
+    def OnCloseFrame(self, event):
+        global child_process
+
+        if child_process:
+            if event.CanVeto():
+                if wx.MessageBox('There is still a child process running, do you want to close it?', 'Confirm closing', wx.ICON_QUESTION | wx.YES_NO) != wx.YES:
+                    event.Veto()
+                    return
+
+            child_process.terminate() # send sigterm
+            child_process.kill()      # send sigkill
+
+        self.Destroy()
+
     def OnExecFinished(self, event):
         global logger
 
@@ -830,20 +880,6 @@ class LauncherFrame(wx.Frame):
         message = event.message.strip('\r')
         self.text_ctrl_log.AppendText(message+'\n')
         event.Skip()
-
-    def OnCloseFrame(self, event):
-        global child_process
-
-        if child_process:
-            if event.CanVeto():
-                if wx.MessageBox('There is still a child process running, do you want to close it?', 'Confirm closing', wx.ICON_QUESTION | wx.YES_NO) != wx.YES:
-                    event.Veto()
-                    return
-
-            child_process.terminate() # send sigterm
-            child_process.kill()      # send sigkill
-
-        self.Destroy()
 
 class BARLauncher(wx.App):
     def OnInit(self):
