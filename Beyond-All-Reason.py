@@ -643,6 +643,13 @@ class MainPanel(wx.Panel):
         scaled_background = self.bg.Scale(client_width, client_height, wx.IMAGE_QUALITY_BILINEAR)
         dc.DrawBitmap(wx.Bitmap(scaled_background), 0, 0)
 
+        font = wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
+        dc.SetFont(font)
+        dc.SetTextForeground(wx.BLACK)
+        dc.DrawText("Beyond All Reason", 32, 32)
+        dc.SetTextForeground(wx.WHITE)
+        dc.DrawText("Beyond All Reason", 30, 30)
+
 class LauncherFrame(wx.Frame):
 
     def __init__(self, *args, **kwds):
@@ -663,9 +670,9 @@ class LauncherFrame(wx.Frame):
         sizer_title = wx.BoxSizer(wx.VERTICAL)
         sizer_top_horz.Add(sizer_title, 1, wx.EXPAND, 0)
 
-        label_title = wx.StaticText(self.panel_main, wx.ID_ANY, "Beyond All Reason")
-        label_title.SetFont(wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        sizer_title.Add(label_title, 0, wx.ALL, 4)
+        #label_title = wx.StaticText(self.panel_main, wx.ID_ANY, "Beyond All Reason")
+        #label_title.SetFont(wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+        #sizer_title.Add(label_title, 0, wx.ALL, 4)
 
         sizer_top_horz.Add((20, 200), 1, wx.ALL | wx.EXPAND, 2)
 
