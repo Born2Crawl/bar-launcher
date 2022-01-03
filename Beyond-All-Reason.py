@@ -684,13 +684,16 @@ class LauncherFrame(wx.Frame):
         self.checkbox_update.SetValue(not no_downloads)
         self.OnCheckboxUpdate()
 
-    def OnButtonToggleLog(self, event):
-        if self.text_ctrl_log.IsShown():
-            self.text_ctrl_log.Hide()
-            self.SetSize((700, 250))
-        else:
+    def SetLogVisible(self, visible):
+        if visible:
             self.text_ctrl_log.Show()
             self.SetSize((700, 500))
+        else:
+            self.text_ctrl_log.Hide()
+            self.SetSize((700, 250))
+
+    def OnButtonToggleLog(self, event):
+        self.SetLogVisible(not self.text_ctrl_log.IsShown())
 
     def OnButtonUploadLog(self, event):
         logger.info('Log upload requested')
@@ -750,9 +753,11 @@ class LauncherFrame(wx.Frame):
         self.combobox_config.Enable()
 
         if event.data:
-            logger.info('Game finished successfully!')
+            logger.info('Game finished successfully! Exiting...')
+            sys.exit()
         else:
-            logger.error('Game process failed!')
+            logger.error('Game process failed! Showing the logs...')
+            self.SetLogVisible(True)
 
         self.updater_starter = None
 
