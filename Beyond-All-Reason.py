@@ -276,7 +276,7 @@ class PlatformManager():
 platform_manager = PlatformManager()
 
 class ProcessStarter():
-    def start_process(self, command):
+    def start_process(self, command, nowait=False):
         global event_notify_frame
         global logger
         global child_process
@@ -284,6 +284,10 @@ class ProcessStarter():
         logger.info('Starting a process:')
         logger.info(' '.join(command))
         try:
+            if nowait:
+                subprocess.Popen(command)
+                return True
+
             with subprocess.Popen(command, stdout=subprocess.PIPE) as proc:
                 child_process = proc
                 while True:
@@ -716,9 +720,8 @@ class LauncherFrame(wx.Frame):
         data_dir = platform_manager.data_dir
         command = platform_manager.get_executable_command('file_manager')
         command.append(data_dir)
-        if not process_starter.start_process(command):
-            if platform_manager.current_platform != 'Windows': # On Windows, launching explorer returns code 1
-                logger.error(f'Couldn\'t open the install directory: {data_dir}')
+        if not process_starter.start_process(command, nowait=True): # We don't need to track the output or kill the child process on exit
+            logger.error(f'Couldn\'t open the install directory: {data_dir}')
 
     def OnCheckboxUpdate(self, event=None):
         if self.checkbox_update.IsChecked():
