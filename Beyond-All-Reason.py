@@ -23,6 +23,9 @@ log_file_name = 'bar-launcher.log'
 logs_bucket = 'bar-infologs'
 logs_url = f'https://{logs_bucket}.s3.amazonaws.com/'
 
+# Global variable for a child process. Since we're running everything sequentially, "there can be only one" (c)
+child_process = None
+
 event_notify_frame = None # global variable for a window to send all events to
 
 # Custom event to notify about Update/Start execution finished
@@ -276,11 +279,13 @@ class ProcessStarter():
     def start_process(self, command):
         global event_notify_frame
         global logger
+        global child_process
 
         logger.info('Starting a process:')
         logger.info(' '.join(command))
         try:
             with subprocess.Popen(command, stdout=subprocess.PIPE) as proc:
+                child_process = proc
                 while True:
                     line = proc.stdout.readline()
                     if not line:
@@ -291,11 +296,14 @@ class ProcessStarter():
                 #streamdata = proc.communicate()[0]
                 proc.wait()
 
+                child_process = None
+
                 retcode = proc.returncode
                 logger.info(f'Process ended with status {retcode}')
 
                 return retcode == 0
         except:
+            child_process = None
             logger.error('Process start failed!')
             e = sys.exc_info()[1]
             logger.error(e)
@@ -382,14 +390,14 @@ class LogUploaderThread(Thread):
             logger.info(f'Uploading: "{file_name}" to: "{bucket}"')
             response = s3_client.upload_file(file_name, bucket, object_name, ExtraArgs={'ContentType': 'text/plain'})
             result = f'{logs_url}{object_name}'
-
-            wx.PostEvent(event_notify_frame, LogUploadedEvent(result))
+            if event_notify_frame:
+                wx.PostEvent(event_notify_frame, LogUploadedEvent(result))
         except:
             logger.error('Upload failed!')
             e = sys.exc_info()[1]
             logger.error(e)
-
-            wx.PostEvent(event_notify_frame, LogUploadedEvent(None))
+            if event_notify_frame:
+                wx.PostEvent(event_notify_frame, LogUploadedEvent(None))
 
 class ClipboardManager():
     def copy(self, text):
@@ -547,12 +555,14 @@ class UpdaterStarterThread(Thread):
                 raise Exception('Error starting the game!')
 
             logger.info('Process finished!')
-            wx.PostEvent(event_notify_frame, ExecFinishedEvent(True))
+            if event_notify_frame:
+                wx.PostEvent(event_notify_frame, ExecFinishedEvent(True))
         except:
             logger.error('Error while updating/starting the game!')
             e = sys.exc_info()[1]
             logger.error(e)
-            wx.PostEvent(event_notify_frame, ExecFinishedEvent(False))
+            if event_notify_frame:
+                wx.PostEvent(event_notify_frame, ExecFinishedEvent(False))
 
 class LauncherFrame(wx.Frame):
 
@@ -648,6 +658,7 @@ class LauncherFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.OnButtonOpenInstallDir, self.button_open_install_dir)
         self.Bind(wx.EVT_BUTTON, self.OnButtonStart, self.button_start)
         self.Bind(wx.EVT_CHECKBOX, self.OnCheckboxUpdate, self.checkbox_update)
+        self.Bind(wx.EVT_CLOSE, self.OnCloseFrame)
 
         self.text_ctrl_log.Hide()
         event_notify_frame = self
@@ -766,6 +777,20 @@ class LauncherFrame(wx.Frame):
             self.label_update_status.SetLabel(message)
         self.text_ctrl_log.AppendText(message+'\n')
         event.Skip()
+
+    def OnCloseFrame(self, event):
+        global child_process
+
+        if child_process:
+            if event.CanVeto():
+                if wx.MessageBox('There is still a child process running, do you want to close it?', 'Confirm closing', wx.ICON_QUESTION | wx.YES_NO) != wx.YES:
+                    event.Veto()
+                    return
+
+            child_process.terminate() # send sigterm
+            child_process.kill()      # send sigkill
+
+        self.Destroy()
 
 class BARLauncher(wx.App):
     def OnInit(self):
