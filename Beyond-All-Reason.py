@@ -287,6 +287,14 @@ class ProcessStarter():
                         break
                     if len(line.rstrip()) > 0:
                         logger.info(line.rstrip().decode('utf-8'))
+
+                #streamdata = proc.communicate()[0]
+                proc.wait()
+
+                retcode = proc.returncode
+                logger.info(f'Process ended with status {retcode}')
+
+                return retcode == 0
         except:
             logger.error('Process start failed!')
             e = sys.exc_info()[1]
@@ -541,7 +549,7 @@ class UpdaterStarterThread(Thread):
             logger.info('Process finished!')
             wx.PostEvent(event_notify_frame, ExecFinishedEvent(True))
         except:
-            logger.error('Error while updating/starting:')
+            logger.error('Error while updating/starting the game!')
             e = sys.exc_info()[1]
             logger.error(e)
             wx.PostEvent(event_notify_frame, ExecFinishedEvent(False))
@@ -698,7 +706,8 @@ class LauncherFrame(wx.Frame):
         command = platform_manager.get_executable_command('file_manager')
         command.append(data_dir)
         if not process_starter.start_process(command):
-            logger.error(f'Couldn\'t open the install directory: {data_dir}')
+            if platform_manager.current_platform != 'Windows': # On Windows, launching explorer returns code 1
+                logger.error(f'Couldn\'t open the install directory: {data_dir}')
 
     def OnCheckboxUpdate(self, event=None):
         if self.checkbox_update.IsChecked():
