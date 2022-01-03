@@ -26,7 +26,7 @@ logs_url = f'https://{logs_bucket}.s3.amazonaws.com/'
 # Global variable for a child process. Since we're running everything sequentially, "there can be only one" (c)
 child_process = None
 
-event_notify_frame = None # global variable for a window to send all events to
+main_frame = None # global variable for a window to send all events to
 
 # Custom event to notify about Update/Start execution finished
 EVT_EXEC_FINISHED_ID = int(wx.NewIdRef(count=1))
@@ -70,8 +70,8 @@ class LoggerToTextCtlHandler(logging.StreamHandler):
     def emit(self, record):
         message = self.format(record)
         event = LoggerMsgEvent(message=message, levelname=record.levelname)
-        if event_notify_frame:
-            wx.PostEvent(event_notify_frame, event)
+        if main_frame:
+            wx.PostEvent(main_frame, event)
 
 logger = logging.getLogger()
 log_formatter_short = logging.Formatter('%(message)s')
@@ -277,7 +277,7 @@ platform_manager = PlatformManager()
 
 class ProcessStarter():
     def start_process(self, command, nowait=False):
-        global event_notify_frame
+        global main_frame
         global logger
         global child_process
 
@@ -376,7 +376,7 @@ class LogUploaderThread(Thread):
         self.start()
 
     def run(self):
-        global event_notify_frame
+        global main_frame
         global logger
 
         file_name = self.file_name
@@ -394,14 +394,14 @@ class LogUploaderThread(Thread):
             logger.info(f'Uploading: "{file_name}" to: "{bucket}"')
             response = s3_client.upload_file(file_name, bucket, object_name, ExtraArgs={'ContentType': 'text/plain'})
             result = f'{logs_url}{object_name}'
-            if event_notify_frame:
-                wx.PostEvent(event_notify_frame, LogUploadedEvent(result))
+            if main_frame:
+                wx.PostEvent(main_frame, LogUploadedEvent(result))
         except:
             logger.error('Upload failed!')
             e = sys.exc_info()[1]
             logger.error(e)
-            if event_notify_frame:
-                wx.PostEvent(event_notify_frame, LogUploadedEvent(None))
+            if main_frame:
+                wx.PostEvent(main_frame, LogUploadedEvent(None))
 
 class ClipboardManager():
     def copy(self, text):
@@ -476,10 +476,27 @@ class UpdaterStarterThread(Thread):
         self.start()
 
     def run(self):
-        global event_notify_frame
+        global main_frame
         global logger
 
         config = config_manager.current_config
+
+        total_progress_steps = 2 # Without updating, only 2 steps (update lobby config and start)
+        current_progres_step = 0
+
+        def set_gauge_range(value):
+            main_frame.gauge_progress.SetRange(value)
+
+        def set_gauge_progress(value):
+            main_frame.gauge_progress.SetValue(value)
+
+        def set_status_text(current_step, total_steps, message):
+            text = f'Step {current_step} out of {total_steps}: {message}'
+            logger.info(text)
+            main_frame.label_update_status.SetLabel(text)
+
+        set_gauge_range(total_progress_steps)
+        set_gauge_progress(current_progres_step)
 
         try:
             if self.is_update:
@@ -491,25 +508,42 @@ class UpdaterStarterThread(Thread):
                 if 'games' in config['downloads']:
                     for game in config['downloads']['games']:
                         pr_downloader_games.update({game: game})
+                        total_progress_steps += 1
 
                 if 'resources' in config['downloads']:
+                    total_progress_steps += 1 # Only one step for all resources, as they are fast to update
                     for resource in config['downloads']['resources']:
                         http_resources.update({resource['url']: resource})
 
-                logger.info('Step 1: Downloading the game repositories')
+                set_gauge_range(total_progress_steps)
+
+                logger.info('Updating the game repositories')
                 for n in pr_downloader_games:
                     logger.info('================================================================================')
-                    if not pr_downloader.download_game(self.data_dir, pr_downloader_games[n]):
+                    game = pr_downloader_games[n]
+
+                    current_progres_step += 1
+                    set_gauge_progress(current_progres_step)
+                    set_status_text(current_progres_step, total_progress_steps, f'updating {game}')
+
+                    if not pr_downloader.download_game(self.data_dir, game):
                         raise Exception(f'Error updating {n}!')
 
-                logger.info('Step 2: Downloading the engine and additional resources')
+                logger.info('Updating the engine and additional resources')
+                if len(http_resources) > 0:
+                    current_progres_step += 1
+                    set_gauge_progress(current_progres_step)
+
                 for n in http_resources:
                     logger.info('================================================================================')
                     resource = http_resources[n]
-                    destination = file_manager.join_path(self.data_dir, resource['destination'])
+                    destination = resource['destination']
+                    destination_path = file_manager.join_path(self.data_dir, resource['destination'])
 
-                    if file_manager.file_exists(destination) or file_manager.dir_exists(destination):
-                        logger.warning(f'"{destination}" already exists, skipping...')
+                    set_status_text(current_progres_step, total_progress_steps, f'updating {destination}')
+
+                    if file_manager.file_exists(destination_path) or file_manager.dir_exists(destination_path):
+                        logger.warning(f'"{destination_path}" already exists, skipping...')
                         continue
 
                     url = resource['url']
@@ -520,10 +554,10 @@ class UpdaterStarterThread(Thread):
 
                     if is_extract:
                         if file_manager.file_exists(self.temp_archive_name):
-                            logger.info(f'Creating directories: "{destination}"')
-                            file_manager.make_dirs(destination)
+                            logger.info(f'Creating directories: "{destination_path}"')
+                            file_manager.make_dirs(destination_path)
 
-                            if not archive_extractor.extract_7zip(self.temp_archive_name, destination):
+                            if not archive_extractor.extract_7zip(self.temp_archive_name, destination_path):
                                 raise Exception(f'Error extracting {self.temp_archive_name}!')
 
                             logger.info(f'Removing a temp file: "{self.temp_archive_name}"')
@@ -532,22 +566,34 @@ class UpdaterStarterThread(Thread):
                             logger.info('Downloaded file didn\'t exist!')
                     else:
                         if file_manager.file_exists(self.temp_archive_name):
-                            destination_path = file_manager.get_dir_name(destination)
-                            logger.info(f'Creating directories: "{destination_path}"')
-                            file_manager.make_dirs(destination_path)
+                            destination_path_dir = file_manager.get_dir_name(destination_path)
+                            logger.info(f'Creating directories: "{destination_path_dir}"')
+                            file_manager.make_dirs(destination_path_dir)
 
-                            logger.info(f'Renaming a temp file: "{self.temp_archive_name}" to: "{destination}"')
-                            file_manager.rename(self.temp_archive_name, destination)
+                            logger.info(f'Renaming a temp file: "{self.temp_archive_name}" to: "{destination_path}"')
+                            file_manager.rename(self.temp_archive_name, destination_path)
                         else:
                             logger.info('Downloaded file didn\'t exist!')
 
-            logger.info('Step 3: Downloading the lobby config')
+            logger.info('Updating lobby config')
+            logger.info('================================================================================')
+
+            current_progres_step += 1
+            set_gauge_progress(current_progres_step)
+            set_status_text(current_progres_step, total_progress_steps, 'updating lobby config')
+
             platform_manager.download_config('lobby')
             lobby_config_path = platform_manager.get_config_path('lobby')
             if not file_manager.file_exists(lobby_config_path):
-                raise Exception('Couldn\'t find the config file to use!')
+                raise Exception('Couldn\'t find lobby config file to use!')
 
-            logger.info('Step 4: Starting the game')
+            logger.info('Starting the game')
+            logger.info('================================================================================')
+
+            current_progres_step += 1
+            set_gauge_progress(current_progres_step)
+            set_status_text(current_progres_step, total_progress_steps, 'starting the game')
+
             # Starting the game
             start_args = config['launch']['start_args']
             engine = config['launch']['engine']
@@ -559,23 +605,23 @@ class UpdaterStarterThread(Thread):
                 raise Exception('Error starting the game!')
 
             logger.info('Process finished!')
-            if event_notify_frame:
-                wx.PostEvent(event_notify_frame, ExecFinishedEvent(True))
+            if main_frame:
+                wx.PostEvent(main_frame, ExecFinishedEvent(True))
         except:
             logger.error('Error while updating/starting the game!')
             e = sys.exc_info()[1]
             logger.error(e)
-            if event_notify_frame:
-                wx.PostEvent(event_notify_frame, ExecFinishedEvent(False))
+            if main_frame:
+                wx.PostEvent(main_frame, ExecFinishedEvent(False))
 
 class LauncherFrame(wx.Frame):
 
     def __init__(self, *args, **kwds):
-        global event_notify_frame
+        global main_frame
 
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
-        self.SetSize((700, 250))
+        self.SetSize((700, 240))
         self.SetTitle("Beyond All Reason")
 
         self.panel_main = wx.Panel(self, wx.ID_ANY)
@@ -621,15 +667,14 @@ class LauncherFrame(wx.Frame):
         self.button_open_install_dir = wx.Button(self.panel_main, wx.ID_ANY, "Open Install Directory")
         sizer_log_buttonz_horz.Add(self.button_open_install_dir, 0, wx.ALL, 2)
 
+        sizer_bottom_left_vert.Add((80, 10), 0, wx.ALL, 2)
+
         self.label_update_status = wx.StaticText(self.panel_main, wx.ID_ANY, "Ready")
         sizer_bottom_left_vert.Add(self.label_update_status, 0, wx.ALL, 2)
 
-        self.gauge_update_current = wx.Gauge(self.panel_main, wx.ID_ANY, 10)
-        self.gauge_update_current.SetMinSize((550, 15))
-        sizer_bottom_left_vert.Add(self.gauge_update_current, 0, wx.ALL | wx.EXPAND, 2)
-
-        self.gauge_update_total = wx.Gauge(self.panel_main, wx.ID_ANY, 10)
-        sizer_bottom_left_vert.Add(self.gauge_update_total, 0, wx.ALL | wx.EXPAND, 2)
+        self.gauge_progress = wx.Gauge(self.panel_main, wx.ID_ANY, 10)
+        self.gauge_progress.SetMinSize((550, 15))
+        sizer_bottom_left_vert.Add(self.gauge_progress, 0, wx.ALL | wx.EXPAND, 2)
 
         sizer_bottom_horz.Add((20, 80), 0, wx.ALL, 2)
 
@@ -656,6 +701,8 @@ class LauncherFrame(wx.Frame):
         #self.Restore()
         #self.Raise()
 
+        self.initial_size = self.GetSize()
+
         self.Bind(wx.EVT_COMBOBOX, self.OnComboboxConfig, self.combobox_config)
         self.Bind(wx.EVT_BUTTON, self.OnButtonToggleLog, self.button_log_toggle)
         self.Bind(wx.EVT_BUTTON, self.OnButtonUploadLog, self.button_log_upload)
@@ -665,7 +712,7 @@ class LauncherFrame(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.OnCloseFrame)
 
         self.text_ctrl_log.Hide()
-        event_notify_frame = self
+        main_frame = self
 
         EVT_EXEC_FINISHED(self, self.OnExecFinished)
         EVT_LOG_UPLOADED(self, self.OnLogUploaded)
@@ -687,10 +734,10 @@ class LauncherFrame(wx.Frame):
     def SetLogVisible(self, visible):
         if visible:
             self.text_ctrl_log.Show()
-            self.SetSize((700, 500))
+            self.SetSize(self.initial_size + (0, 250))
         else:
             self.text_ctrl_log.Hide()
-            self.SetSize((700, 250))
+            self.SetSize(self.initial_size)
 
     def OnButtonToggleLog(self, event):
         self.SetLogVisible(not self.text_ctrl_log.IsShown())
@@ -781,8 +828,6 @@ class LauncherFrame(wx.Frame):
 
     def OnLoggerMsg(self, event):
         message = event.message.strip('\r')
-        if message.startswith('Step'):
-            self.label_update_status.SetLabel(message)
         self.text_ctrl_log.AppendText(message+'\n')
         event.Skip()
 
