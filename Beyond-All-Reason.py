@@ -54,6 +54,42 @@ class LogUploadedEvent(wx.PyEvent):
         self.SetEventType(EVT_LOG_UPLOADED_ID)
         self.data = data
 
+# Custom event to update the status text
+EVT_STATUS_UPDATE_ID = int(wx.NewIdRef(count=1))
+
+def EVT_STATUS_UPDATE(win, func):
+    win.Connect(-1, -1, EVT_STATUS_UPDATE_ID, func)
+
+class StatusUpdateEvent(wx.PyEvent):
+    def __init__(self, data):
+        wx.PyEvent.__init__(self)
+        self.SetEventType(EVT_STATUS_UPDATE_ID)
+        self.data = data
+
+# Custom event to update the progress bar
+EVT_PROGRESS_UPDATE_ID = int(wx.NewIdRef(count=1))
+
+def EVT_PROGRESS_UPDATE(win, func):
+    win.Connect(-1, -1, EVT_PROGRESS_UPDATE_ID, func)
+
+class ProgressUpdateEvent(wx.PyEvent):
+    def __init__(self, data):
+        wx.PyEvent.__init__(self)
+        self.SetEventType(EVT_PROGRESS_UPDATE_ID)
+        self.data = data
+
+# Custom event to minimize the main window
+EVT_ICONIZE_WINDOW_ID = int(wx.NewIdRef(count=1))
+
+def EVT_ICONIZE_WINDOW(win, func):
+    win.Connect(-1, -1, EVT_ICONIZE_WINDOW_ID, func)
+
+class IconizeWindowEvent(wx.PyEvent):
+    def __init__(self, data):
+        wx.PyEvent.__init__(self)
+        self.SetEventType(EVT_ICONIZE_WINDOW_ID)
+        self.data = data
+
 # Custom event to catch logger messages and add them to text control
 EVT_LOGGER_MSG_ID = int(wx.NewIdRef(count=1))
 
@@ -487,15 +523,17 @@ class UpdaterStarterThread(Thread):
         current_progres_step = 0
 
         def set_gauge_range(value):
-            main_frame.gauge_progress.SetRange(value)
+            if main_frame:
+                wx.PostEvent(main_frame, ProgressUpdateEvent({'range': value}))
 
         def set_gauge_progress(value):
-            main_frame.gauge_progress.SetValue(value)
+            if main_frame:
+                wx.PostEvent(main_frame, ProgressUpdateEvent({'value': value}))
 
         def set_status_text(current_step, total_steps, message):
             text = f'Step {current_step} out of {total_steps}: {message}'
-            logger.info(text)
-            main_frame.label_update_status.SetLabel(text)
+            if main_frame:
+                wx.PostEvent(main_frame, StatusUpdateEvent(text))
 
         set_gauge_range(total_progress_steps)
         set_gauge_progress(current_progres_step)
@@ -596,8 +634,8 @@ class UpdaterStarterThread(Thread):
             set_gauge_progress(current_progres_step)
             set_status_text(current_progres_step, total_progress_steps, 'starting the game')
 
-            main_frame.Iconize(True)
-            main_frame.Hide()
+            if main_frame:
+                wx.PostEvent(main_frame, IconizeWindowEvent(True))
 
             # Starting the game
             start_args = config['launch']['start_args']
@@ -645,13 +683,16 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
     def OnTaskBarActivate(self, evt):
         pass
 
-    def OnToggleHide(self, evt):
-        if self.frame.IsIconized():
-            self.frame.Show()
-            self.frame.Restore()
-        else:
+    def IconizeWindow(self, is_iconize):
+        if is_iconize:
             self.frame.Iconize(True)
             self.frame.Hide()
+        else:
+            self.frame.Show()
+            self.frame.Restore()
+
+    def OnToggleHide(self, evt):
+        self.IconizeWindow(not self.frame.IsIconized())
 
     def OnTaskBarClose(self, evt):
         self.frame.Close()
@@ -809,6 +850,9 @@ class LauncherFrame(wx.Frame):
 
         EVT_EXEC_FINISHED(self, self.OnExecFinished)
         EVT_LOG_UPLOADED(self, self.OnLogUploaded)
+        EVT_STATUS_UPDATE(self, self.OnStatusUpdate)
+        EVT_PROGRESS_UPDATE(self, self.OnProgressUpdate)
+        EVT_ICONIZE_WINDOW(self, self.OnIconizeWindow)
         EVT_LOGGER_MSG(self, self.OnLoggerMsg)
 
         self.updater_starter = None
@@ -894,7 +938,7 @@ class LauncherFrame(wx.Frame):
                     return
 
             child_process.terminate() # send sigterm
-            child_process.kill()      # send sigkill
+            #child_process.kill()      # send sigkill
 
         self.tray_icon.RemoveIcon()
         self.tray_icon.Destroy()
@@ -938,6 +982,28 @@ class LauncherFrame(wx.Frame):
             logger.error('Log upload failed!')
 
         self.log_uploader = None
+
+    def OnStatusUpdate(self, event):
+        if not event.data:
+            return
+        logger.info(event.data)
+        self.label_update_status.SetLabel(event.data)
+
+    def OnProgressUpdate(self, event):
+        if not event.data:
+            return
+
+        if 'range' in event.data:
+            self.gauge_progress.SetRange(event.data['range'])
+
+        if 'value' in event.data:
+            self.gauge_progress.SetValue(event.data['value'])
+
+    def OnIconizeWindow(self, event):
+        if not event.data:
+            return
+
+        self.tray_icon.IconizeWindow(event.data)
 
     def OnLoggerMsg(self, event):
         message = event.message.strip('\r')
