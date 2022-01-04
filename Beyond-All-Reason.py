@@ -3,6 +3,7 @@
 
 import os
 import wx
+import wx.adv
 import sys
 import json
 import stat
@@ -19,6 +20,7 @@ from threading import *
 import boto3
 from botocore.exceptions import ClientError
 
+game_name = 'Beyond All Reason'
 log_file_name = 'bar-launcher.log'
 logs_bucket = 'bar-infologs'
 logs_url = f'https://{logs_bucket}.s3.amazonaws.com/'
@@ -617,6 +619,41 @@ class UpdaterStarterThread(Thread):
                 wx.PostEvent(main_frame, ExecFinishedEvent(e))
 
 
+def create_menu_item(menu, label, func):
+    item = wx.MenuItem(menu, -1, label)
+    menu.Bind(wx.EVT_MENU, func, id=item.GetId())
+    menu.Append(item)
+    return item
+
+class CustomTaskBarIcon(wx.adv.TaskBarIcon):
+    def __init__(self, frame):
+        wx.adv.TaskBarIcon.__init__(self)
+        self.frame = frame
+        self.icon = wx.Icon(wx.Bitmap('resources/icon.png'))
+
+        self.SetIcon(self.icon, game_name)
+        self.Bind(wx.adv.EVT_TASKBAR_LEFT_DOWN, self.OnTaskBarLeftClick)
+
+    def CreatePopupMenu(self):
+        menu = wx.Menu()
+        create_menu_item(menu, 'Toggle Hide', self.OnTaskBarLeftClick)
+        menu.AppendSeparator()
+        create_menu_item(menu, 'Exit', self.OnTaskBarClose)
+        return menu
+
+    def OnTaskBarActivate(self, evt):
+        pass
+
+    def OnTaskBarClose(self, evt):
+        self.frame.Close()
+
+    def OnTaskBarLeftClick(self, evt):
+        if self.frame.IsIconized():
+            self.frame.Show()
+            self.frame.Restore()
+        else:
+            self.frame.Iconize(True)
+
 class MainPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent=parent)
@@ -648,9 +685,9 @@ class MainPanel(wx.Panel):
         font = wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
         dc.SetFont(font)
         dc.SetTextForeground(wx.BLACK)
-        dc.DrawText("Beyond All Reason", 32, 32)
+        dc.DrawText(game_name, 32, 32)
         dc.SetTextForeground(wx.WHITE)
-        dc.DrawText("Beyond All Reason", 30, 30)
+        dc.DrawText(game_name, 30, 30)
 
 class LauncherFrame(wx.Frame):
 
@@ -660,7 +697,7 @@ class LauncherFrame(wx.Frame):
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
         self.SetSize((800, 380))
-        self.SetTitle("Beyond All Reason")
+        self.SetTitle(game_name)
 
         self.panel_main = MainPanel(self)
 
@@ -672,7 +709,7 @@ class LauncherFrame(wx.Frame):
         sizer_title = wx.BoxSizer(wx.VERTICAL)
         sizer_top_horz.Add(sizer_title, 1, wx.EXPAND, 0)
 
-        #label_title = wx.StaticText(self.panel_main, wx.ID_ANY, "Beyond All Reason")
+        #label_title = wx.StaticText(self.panel_main, wx.ID_ANY, game_name)
         #label_title.SetFont(wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         #sizer_title.Add(label_title, 0, wx.ALL, 24)
 
@@ -754,6 +791,7 @@ class LauncherFrame(wx.Frame):
         self.Restore()
 
         self.initial_size = self.GetSize()
+        self.tray_icon = CustomTaskBarIcon(self)
 
         self.Bind(wx.EVT_COMBOBOX, self.OnComboboxConfig, self.combobox_config)
         self.Bind(wx.EVT_BUTTON, self.OnButtonToggleLog, self.button_log_toggle)
@@ -761,6 +799,7 @@ class LauncherFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.OnButtonOpenInstallDir, self.button_open_install_dir)
         self.Bind(wx.EVT_BUTTON, self.OnButtonStart, self.button_start)
         self.Bind(wx.EVT_CHECKBOX, self.OnCheckboxUpdate, self.checkbox_update)
+        self.Bind(wx.EVT_ICONIZE, self.OnMinimize)
         self.Bind(wx.EVT_CLOSE, self.OnCloseFrame)
 
         self.text_ctrl_log.Hide()
@@ -843,6 +882,10 @@ class LauncherFrame(wx.Frame):
         else:
             logger.warning('Update/Start process is already running!')
 
+    def OnMinimize(self, event):
+        if self.IsIconized():
+            self.Hide()
+
     def OnCloseFrame(self, event):
         global child_process
 
@@ -855,6 +898,8 @@ class LauncherFrame(wx.Frame):
             child_process.terminate() # send sigterm
             child_process.kill()      # send sigkill
 
+        self.tray_icon.RemoveIcon()
+        self.tray_icon.Destroy()
         self.Destroy()
 
     def OnExecFinished(self, event):
