@@ -597,6 +597,7 @@ class UpdaterStarterThread(Thread):
             set_status_text(current_progres_step, total_progress_steps, 'starting the game')
 
             main_frame.Iconize(True)
+            main_frame.Hide()
 
             # Starting the game
             start_args = config['launch']['start_args']
@@ -632,11 +633,11 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
         self.icon = wx.Icon(wx.Bitmap('resources/icon.png'))
 
         self.SetIcon(self.icon, game_name)
-        self.Bind(wx.adv.EVT_TASKBAR_LEFT_DOWN, self.OnTaskBarLeftClick)
+        self.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.OnToggleHide)
 
     def CreatePopupMenu(self):
         menu = wx.Menu()
-        create_menu_item(menu, 'Toggle Hide', self.OnTaskBarLeftClick)
+        create_menu_item(menu, 'Toggle Hide', self.OnToggleHide)
         menu.AppendSeparator()
         create_menu_item(menu, 'Exit', self.OnTaskBarClose)
         return menu
@@ -644,15 +645,16 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
     def OnTaskBarActivate(self, evt):
         pass
 
-    def OnTaskBarClose(self, evt):
-        self.frame.Close()
-
-    def OnTaskBarLeftClick(self, evt):
+    def OnToggleHide(self, evt):
         if self.frame.IsIconized():
             self.frame.Show()
             self.frame.Restore()
         else:
             self.frame.Iconize(True)
+            self.frame.Hide()
+
+    def OnTaskBarClose(self, evt):
+        self.frame.Close()
 
 class MainPanel(wx.Panel):
     def __init__(self, parent):
@@ -799,7 +801,6 @@ class LauncherFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.OnButtonOpenInstallDir, self.button_open_install_dir)
         self.Bind(wx.EVT_BUTTON, self.OnButtonStart, self.button_start)
         self.Bind(wx.EVT_CHECKBOX, self.OnCheckboxUpdate, self.checkbox_update)
-        self.Bind(wx.EVT_ICONIZE, self.OnMinimize)
         self.Bind(wx.EVT_CLOSE, self.OnCloseFrame)
 
         self.text_ctrl_log.Hide()
@@ -881,10 +882,6 @@ class LauncherFrame(wx.Frame):
             self.updater_starter = UpdaterStarterThread(self.checkbox_update.IsChecked())
         else:
             logger.warning('Update/Start process is already running!')
-
-    def OnMinimize(self, event):
-        if self.IsIconized():
-            self.Hide()
 
     def OnCloseFrame(self, event):
         global child_process
