@@ -1,6 +1,7 @@
 # BAR data
 data/*
 config.json
+*.bak
 
 # BAR executables
 Beyond-All-Reason
