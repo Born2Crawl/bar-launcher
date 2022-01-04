@@ -917,7 +917,7 @@ class LauncherFrame(wx.Frame):
         else:
             self.label_update_status.SetLabel('Ready')
             logger.info('Game finished successfully! Exiting...')
-            sys.exit()
+            self.OnCloseFrame(self)
 
         self.updater_starter = None
 
