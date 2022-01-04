@@ -123,7 +123,7 @@ class FileManager():
             return os.rename(current_path, new_path)
         except:
             logger.error('Couldn\'t rename!')
-            e = sys.exc_info()[1]
+            e = str(sys.exc_info()[1])
             logger.error(e)
 
     def remove(self, path):
@@ -133,7 +133,7 @@ class FileManager():
             return os.remove(path)
         except:
             logger.error('Couldn\'t remove!')
-            e = sys.exc_info()[1]
+            e = str(sys.exc_info()[1])
             logger.error(e)
 
 file_manager = FileManager()
@@ -309,7 +309,7 @@ class ProcessStarter():
         except:
             child_process = None
             logger.error('Process start failed!')
-            e = sys.exc_info()[1]
+            e = str(sys.exc_info()[1])
             logger.error(e)
             return False
 
@@ -346,7 +346,7 @@ class HttpDownloader():
             open(target_file, 'wb').write(r.content)
         except:
             logger.error('Download failed:')
-            e = sys.exc_info()[1]
+            e = str(sys.exc_info()[1])
             logger.error(e)
             return False
         return True
@@ -398,7 +398,7 @@ class LogUploaderThread(Thread):
                 wx.PostEvent(main_frame, LogUploadedEvent(result))
         except:
             logger.error('Upload failed!')
-            e = sys.exc_info()[1]
+            e = str(sys.exc_info()[1])
             logger.error(e)
             if main_frame:
                 wx.PostEvent(main_frame, LogUploadedEvent(None))
@@ -412,7 +412,7 @@ class ClipboardManager():
             pyperclip.copy(text)
         except:
             logger.error('Copying failed:')
-            e = sys.exc_info()[1]
+            e = str(sys.exc_info()[1])
             logger.error(e)
             return False
         return True
@@ -594,6 +594,8 @@ class UpdaterStarterThread(Thread):
             set_gauge_progress(current_progres_step)
             set_status_text(current_progres_step, total_progress_steps, 'starting the game')
 
+            main_frame.Iconize(True)
+
             # Starting the game
             start_args = config['launch']['start_args']
             engine = config['launch']['engine']
@@ -602,17 +604,17 @@ class UpdaterStarterThread(Thread):
             spring_command.extend(['--write-dir', self.data_dir, '--isolation'])
             spring_command.extend(start_args)
             if not process_starter.start_process(spring_command):
-                raise Exception('Error starting the game!')
+                raise Exception('Error while running the game!')
 
             logger.info('Process finished!')
             if main_frame:
-                wx.PostEvent(main_frame, ExecFinishedEvent(True))
+                wx.PostEvent(main_frame, ExecFinishedEvent(None))
         except:
             logger.error('Error while updating/starting the game!')
-            e = sys.exc_info()[1]
+            e = str(sys.exc_info()[1])
             logger.error(e)
             if main_frame:
-                wx.PostEvent(main_frame, ExecFinishedEvent(False))
+                wx.PostEvent(main_frame, ExecFinishedEvent(e))
 
 
 class MainPanel(wx.Panel):
@@ -748,8 +750,8 @@ class LauncherFrame(wx.Frame):
 
         self.Layout()
         self.Centre()
-        #self.Restore()
-        #self.Raise()
+
+        self.Restore()
 
         self.initial_size = self.GetSize()
 
@@ -858,18 +860,21 @@ class LauncherFrame(wx.Frame):
     def OnExecFinished(self, event):
         global logger
 
-        self.label_update_status.SetLabel('Ready')
         self.gauge_progress.SetValue(0)
         self.button_start.Enable()
         self.checkbox_update.Enable()
         self.combobox_config.Enable()
 
         if event.data:
+            self.label_update_status.SetLabel(event.data)
+            logger.error('Game process failed! Showing the logs...')
+
+            self.Restore()
+            self.SetLogVisible(True)
+        else:
+            self.label_update_status.SetLabel('Ready')
             logger.info('Game finished successfully! Exiting...')
             sys.exit()
-        else:
-            logger.error('Game process failed! Showing the logs...')
-            self.SetLogVisible(True)
 
         self.updater_starter = None
 
