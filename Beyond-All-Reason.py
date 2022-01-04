@@ -835,7 +835,7 @@ class LauncherFrame(wx.Frame):
 
         self.initial_size = self.GetSize()
         self.tray_icon = CustomTaskBarIcon(self)
-        self.SetIcon(wx.Icon('resources/icon.ico'))
+        self.SetIcon(wx.Icon('resources/icon.png'))
 
         self.Bind(wx.EVT_COMBOBOX, self.OnComboboxConfig, self.combobox_config)
         self.Bind(wx.EVT_BUTTON, self.OnButtonToggleLog, self.button_log_toggle)
