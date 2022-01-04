@@ -342,7 +342,7 @@ class HttpDownloader():
             else:
                 target_file = target
 
-            r = requests.get(source_url, allow_redirects=True)
+            r = requests.get(source_url, allow_redirects=True, timeout=3)
             open(target_file, 'wb').write(r.content)
         except:
             logger.error('Download failed:')
@@ -640,7 +640,7 @@ class MainPanel(wx.Panel):
 
         dc.Clear()
         client_height = int(client_width / self.proportion)
-        scaled_background = self.bg.Scale(client_width, client_height, wx.IMAGE_QUALITY_BILINEAR)
+        scaled_background = self.bg.Scale(client_width, client_height, wx.IMAGE_QUALITY_HIGH)
         dc.DrawBitmap(wx.Bitmap(scaled_background), 0, 0)
 
         font = wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
@@ -672,7 +672,7 @@ class LauncherFrame(wx.Frame):
 
         #label_title = wx.StaticText(self.panel_main, wx.ID_ANY, "Beyond All Reason")
         #label_title.SetFont(wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        #sizer_title.Add(label_title, 0, wx.ALL, 4)
+        #sizer_title.Add(label_title, 0, wx.ALL, 24)
 
         sizer_top_horz.Add((20, 200), 1, wx.ALL | wx.EXPAND, 2)
 
@@ -710,8 +710,13 @@ class LauncherFrame(wx.Frame):
 
         sizer_bottom_left_vert.Add((80, 20), 0, wx.ALL, 2)
 
-        self.label_update_status = wx.StaticText(self.panel_main, wx.ID_ANY, "Ready")
-        sizer_bottom_left_vert.Add(self.label_update_status, 0, wx.ALL, 2)
+        self.panel_status = wx.Panel(self.panel_main, wx.ID_ANY, style=wx.BORDER_STATIC)
+        sizer_bottom_left_vert.Add(self.panel_status, 0, wx.ALL | wx.EXPAND, 2)
+
+        sizer_status = wx.BoxSizer(wx.HORIZONTAL)
+
+        self.label_update_status = wx.StaticText(self.panel_status, wx.ID_ANY, "Ready")
+        sizer_status.Add(self.label_update_status, 0, wx.ALL, 2)
 
         self.gauge_progress = wx.Gauge(self.panel_main, wx.ID_ANY, 10)
         self.gauge_progress.SetMinSize((550, 15))
@@ -736,6 +741,8 @@ class LauncherFrame(wx.Frame):
 
         self.text_ctrl_log = wx.TextCtrl(self.panel_main, wx.ID_ANY, "", style=wx.TE_DONTWRAP | wx.TE_MULTILINE | wx.TE_READONLY)
         sizer_main_vert.Add(self.text_ctrl_log, 1, wx.ALL | wx.EXPAND, 4)
+
+        self.panel_status.SetSizer(sizer_status)
 
         self.panel_main.SetSizer(sizer_main_vert)
 
@@ -852,6 +859,7 @@ class LauncherFrame(wx.Frame):
         global logger
 
         self.label_update_status.SetLabel('Ready')
+        self.gauge_progress.SetValue(0)
         self.button_start.Enable()
         self.checkbox_update.Enable()
         self.combobox_config.Enable()
