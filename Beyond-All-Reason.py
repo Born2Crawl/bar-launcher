@@ -133,14 +133,14 @@ class FileManager():
     def get_current_dir(self):
         return os.getcwd()
 
-    def get_dir_name(self, path):
-        return os.path.dirname(path)
-
     def join_path(self, *args):
         return os.path.join(*args)
 
     def split_extension(self, path):
         return os.path.splitext(path)
+
+    def extract_dir_name(self, path):
+        return os.path.dirname(path)
 
     def extract_filename(self, path):
         return os.path.basename(path)
@@ -182,29 +182,37 @@ class PlatformManager():
     data_dir = file_manager.join_path(current_dir, 'data')
     executable_dir = file_manager.join_path(current_dir, 'bin')
 
-    config_files = {
-        'launcher': {
+    resources = {
+        'launcher_config': {
             'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json',
             'path': file_manager.join_path(current_dir, 'config.json'),
         },
-        'lobby': {
+        'lobby_config': {
             'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/files/chobby_config.json',
             'path': file_manager.join_path(data_dir, 'chobby_config.json'),
         },
+        'background_image': {
+            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/resources/background.png',
+            'path': file_manager.join_path(current_dir, 'resources', 'background.png'),
+        },
+        'icon_image': {
+            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/resources/icon.png',
+            'path': file_manager.join_path(current_dir, 'resources', 'icon.png'),
+        },
     }
 
-    def get_config_path(self, name):
-        return self.config_files[name]['path']
+    def get_resource_path(self, name):
+        return self.resources[name]['path']
 
-    def get_config_url(self, name):
-        return self.config_files[name]['url']
+    def get_resource_url(self, name):
+        return self.resources[name]['url']
 
-    def download_config(self, name):
-        config_path = self.get_config_path(name)
-        config_url = self.get_config_url(name)
+    def download_resource(self, name):
+        resource_path = self.get_resource_path(name)
+        resource_url = self.get_resource_url(name)
 
-        logger.info(f'Trying to download a fresh {name} config from {config_url}')
-        http_downloader.download_file(config_url, config_path)
+        logger.info(f'Trying to download {name} from {resource_url}')
+        http_downloader.download_file(resource_url, resource_path)
 
     platform_binaries = {
         'Windows': {
@@ -380,6 +388,9 @@ class HttpDownloader():
             else:
                 target_file = target
 
+            logger.info(f'Creating directories for "{target_file}" if needed...')
+            file_manager.make_dirs(file_manager.extract_dir_name(target_file))
+
             r = requests.get(source_url, allow_redirects=True, timeout=3)
             open(target_file, 'wb').write(r.content)
         except:
@@ -467,8 +478,8 @@ class ConfigManager():
     def read_config(self):
         global logger
 
-        platform_manager.download_config('launcher')
-        launcher_config_path = platform_manager.get_config_path('launcher')
+        platform_manager.download_resource('launcher_config')
+        launcher_config_path = platform_manager.get_resource_path('launcher_config')
         if not file_manager.file_exists(launcher_config_path):
             raise Exception('Couldn\'t find the config file to use!')
 
@@ -606,7 +617,7 @@ class UpdaterStarterThread(Thread):
                             logger.info('Downloaded file didn\'t exist!')
                     else:
                         if file_manager.file_exists(self.temp_archive_name):
-                            destination_path_dir = file_manager.get_dir_name(destination_path)
+                            destination_path_dir = file_manager.extract_dir_name(destination_path)
                             logger.info(f'Creating directories: "{destination_path_dir}"')
                             file_manager.make_dirs(destination_path_dir)
 
@@ -622,8 +633,8 @@ class UpdaterStarterThread(Thread):
             set_gauge_progress(current_progres_step)
             set_status_text(current_progres_step, total_progress_steps, 'updating lobby config')
 
-            platform_manager.download_config('lobby')
-            lobby_config_path = platform_manager.get_config_path('lobby')
+            platform_manager.download_resource('lobby_config')
+            lobby_config_path = platform_manager.get_resource_path('lobby_config')
             if not file_manager.file_exists(lobby_config_path):
                 raise Exception('Couldn\'t find lobby config file to use!')
 
@@ -665,10 +676,10 @@ def create_menu_item(menu, label, func):
     return item
 
 class CustomTaskBarIcon(wx.adv.TaskBarIcon):
-    def __init__(self, frame):
+    def __init__(self, frame, icon_path):
         wx.adv.TaskBarIcon.__init__(self)
         self.frame = frame
-        self.icon = wx.Icon(wx.Bitmap('resources/icon.png'))
+        self.icon = wx.Icon(wx.Bitmap(icon_path))
 
         self.SetIcon(self.icon, game_name)
         self.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.OnToggleHide)
@@ -698,10 +709,10 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
         self.frame.Close()
 
 class MainPanel(wx.Panel):
-    def __init__(self, parent):
+    def __init__(self, parent, background_path):
         wx.Panel.__init__(self, parent=parent)
         self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
-        self.bg = wx.Image('resources/background.png', wx.BITMAP_TYPE_ANY)
+        self.bg = wx.Image(background_path, wx.BITMAP_TYPE_ANY)
         self.proportion = self.bg.GetWidth() / self.bg.GetHeight()
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -737,12 +748,24 @@ class LauncherFrame(wx.Frame):
     def __init__(self, *args, **kwds):
         global main_frame
 
+        icon_path = platform_manager.get_resource_path('icon_image')
+        if not file_manager.file_exists(icon_path):
+            platform_manager.download_resource('icon_image')
+        if not file_manager.file_exists(icon_path):
+            raise Exception('Couldn\'t find or download the icon image to use!')
+
+        background_path = platform_manager.get_resource_path('background_image')
+        if not file_manager.file_exists(background_path):
+            platform_manager.download_resource('background_image')
+        if not file_manager.file_exists(background_path):
+            raise Exception('Couldn\'t find or download the background image to use!')
+
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
         self.SetSize((800, 380))
         self.SetTitle(game_name)
 
-        self.panel_main = MainPanel(self)
+        self.panel_main = MainPanel(self, background_path)
 
         sizer_main_vert = wx.BoxSizer(wx.VERTICAL)
 
@@ -834,8 +857,8 @@ class LauncherFrame(wx.Frame):
         self.Restore()
 
         self.initial_size = self.GetSize()
-        self.tray_icon = CustomTaskBarIcon(self)
-        self.SetIcon(wx.Icon('resources/icon.png'))
+        self.tray_icon = CustomTaskBarIcon(self, icon_path)
+        self.SetIcon(wx.Icon(icon_path))
 
         self.Bind(wx.EVT_COMBOBOX, self.OnComboboxConfig, self.combobox_config)
         self.Bind(wx.EVT_BUTTON, self.OnButtonToggleLog, self.button_log_toggle)
