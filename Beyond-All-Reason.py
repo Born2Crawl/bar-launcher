@@ -912,7 +912,7 @@ class LauncherFrame(wx.Frame):
 
     def OnCheckboxUpdate(self, event=None):
         if self.checkbox_update.IsChecked():
-            self.button_start.SetLabel('Update')
+            self.button_start.SetLabel('Update\n&& Start')
         else:
             self.button_start.SetLabel('Start')
 
