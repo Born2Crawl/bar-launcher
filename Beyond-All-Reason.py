@@ -8,6 +8,7 @@ import sys
 import json
 import stat
 import time
+import hashlib
 import logging
 import platform
 import pyperclip
@@ -209,6 +210,10 @@ class PlatformManager():
             'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/resources/fonts/Poppins-Bold.ttf',
             'path': file_manager.join_path(current_dir, 'resources', 'fonts', 'Poppins-Bold.ttf'),
         },
+        'file_hashes': {
+            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/bar-launcher.md5',
+            'path': file_manager.join_path(current_dir, 'bar-launcher.md5'),
+        },
     }
 
     def get_resource_path(self, resource_name):
@@ -236,6 +241,13 @@ class PlatformManager():
 
     platform_binaries = {
         'Windows': {
+            'launcher': {
+                'command': ['Beyond-All-Reason.exe'],
+                'path': '',
+                'downloads': [
+                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/Beyond-All-Reason.exe',
+                ],
+            },
             '7zip': {
                 'command': ['7z_win64.exe'],
                 'path': 'bin',
@@ -260,6 +272,13 @@ class PlatformManager():
             },
         },
         'Linux': {
+            'launcher': {
+                'command': ['Beyond-All-Reason'],
+                'path': '',
+                'downloads': [
+                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/Beyond-All-Reason',
+                ],
+            },
             '7zip': {
                 'command': ['7zz_linux_x86-64'],
                 'path': 'bin',
@@ -282,6 +301,13 @@ class PlatformManager():
             },
         },
         'Darwin': {
+            'launcher': {
+                'command': ['Beyond-All-Reason'],
+                'path': '',
+                'downloads': [
+                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/Beyond-All-Reason',
+                ],
+            },
             '7zip': {
                 'command': ['7zz_macos'],
                 'path': 'bin',
@@ -554,6 +580,17 @@ class UpdaterStarterThread(Thread):
         total_progress_steps = 2 # Without updating, only 2 steps (update lobby config and start)
         current_progres_step = 0
 
+        def calc_file_md5(path):
+            with open(sys.argv[0], 'rb') as f:
+                file_hash = hashlib.md5()
+                chunk = f.read(8192)
+                while chunk:
+                    file_hash.update(chunk)
+                    chunk = f.read(8192)
+            print()
+
+            return file_hash.hexdigest()
+
         def set_gauge_range(value):
             if main_frame:
                 wx.PostEvent(main_frame, ProgressUpdateEvent({'range': value}))
@@ -577,6 +614,9 @@ class UpdaterStarterThread(Thread):
                 http_resources = {}
                 launchers = []
 
+                # Self-update
+                total_progress_steps += 1
+
                 # Updating the game according to the current config
                 if 'games' in config['downloads']:
                     for game in config['downloads']['games']:
@@ -589,6 +629,34 @@ class UpdaterStarterThread(Thread):
                         http_resources.update({resource['url']: resource})
 
                 set_gauge_range(total_progress_steps)
+
+                logger.info('Checking for self-update')
+                logger.info('================================================================================')
+
+                current_progres_step += 1
+                set_gauge_progress(current_progres_step)
+                set_status_text(current_progres_step, total_progress_steps, 'checking for self-update')
+
+                platform_manager.ensure_resource_exists('file_hashes', force_download_fresh=True, ignore_download_fail=True)
+                file_hashes_path = platform_manager.get_resource_path('file_hashes')
+
+                self_full_path = file_manager.get_full_path(sys.argv[0])
+                self_file_name = file_manager.extract_filename(self_full_path)
+                self_file_md5 = calc_file_md5(self_full_path)
+
+                f = open(file_hashes_path, 'r')
+                file_hashes_lines = f.readlines()
+
+                for line in file_hashes_lines:
+                    update_filename_hash = line.split()
+                    update_filename = update_filename_hash[1].lstrip('*')
+                    update_hash = update_filename_hash[0]
+                    if update_filename == self_file_name:
+                        if self_file_md5 == update_hash:
+                            logger.info(f'{update_filename} hash matches the latest version hash ({update_hash}), no update needed')
+                        else:
+                            logger.info(f'{update_filename} hash ({self_file_md5}) doesn\'t match the latest version hash ({update_hash}), update needed!')
+                            #platform_manager.download_executable('launcher')
 
                 logger.info('Updating the game repositories')
                 for n in pr_downloader_games:
