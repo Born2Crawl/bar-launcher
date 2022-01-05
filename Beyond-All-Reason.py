@@ -142,6 +142,9 @@ class FileManager():
     def extract_dir_name(self, path):
         return os.path.dirname(path)
 
+    def get_full_path(self, filename):
+        return os.path.realpath(filename)
+
     def extract_filename(self, path):
         return os.path.basename(path)
 
@@ -155,20 +158,23 @@ class FileManager():
         return os.makedirs(path, exist_ok=True)
 
     def rename(self, current_path, new_path):
-        global logger
-
-        try:
-            return os.rename(current_path, new_path)
-        except:
-            logger.error('Couldn\'t rename!')
-            e = str(sys.exc_info()[1])
-            logger.error(e)
+        return os.rename(current_path, new_path)
 
     def remove(self, path):
         global logger
 
         try:
             return os.remove(path)
+        except:
+            logger.error('Couldn\'t remove!')
+            e = str(sys.exc_info()[1])
+            logger.error(e)
+
+    def remove_dir(self, path):
+        global logger
+
+        try:
+            return os.rmdir(path)
         except:
             logger.error('Couldn\'t remove!')
             e = str(sys.exc_info()[1])
@@ -405,8 +411,11 @@ class HttpDownloader():
             logger.info(f'Creating directories for "{target_file}" if needed...')
             file_manager.make_dirs(file_manager.extract_dir_name(target_file))
 
-            r = requests.get(source_url, allow_redirects=True, timeout=3)
-            open(target_file, 'wb').write(r.content)
+            response = requests.get(source_url, allow_redirects=True, timeout=3)
+            if response.status_code >= 300:
+                raise Exception('Bad response: {status_code} ({content})'.format(status_code=str(response.status_code), content=response.content.decode('utf-8')))
+
+            open(target_file, 'wb').write(response.content)
         except:
             logger.error('Download failed:')
             e = str(sys.exc_info()[1])
@@ -555,6 +564,7 @@ class UpdaterStarterThread(Thread):
 
         def set_status_text(current_step, total_steps, message):
             text = f'Step {current_step} out of {total_steps}: {message}'
+            logger.info(text)
             if main_frame:
                 wx.PostEvent(main_frame, StatusUpdateEvent(text))
 
@@ -621,6 +631,7 @@ class UpdaterStarterThread(Thread):
                             file_manager.make_dirs(destination_path)
 
                             if not archive_extractor.extract_7zip(self.temp_archive_name, destination_path):
+                                file_manager.remove_dir(destination_path) # Removing a (hopefully) empty directory
                                 raise Exception(f'Error extracting {self.temp_archive_name}!')
 
                             logger.info(f'Removing a temp file: "{self.temp_archive_name}"')
@@ -678,12 +689,6 @@ class UpdaterStarterThread(Thread):
                 wx.PostEvent(main_frame, ExecFinishedEvent(e))
 
 
-def create_menu_item(menu, label, func):
-    item = wx.MenuItem(menu, -1, label)
-    menu.Bind(wx.EVT_MENU, func, id=item.GetId())
-    menu.Append(item)
-    return item
-
 class CustomTaskBarIcon(wx.adv.TaskBarIcon):
     def __init__(self, frame, icon_path):
         wx.adv.TaskBarIcon.__init__(self)
@@ -691,16 +696,22 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
         self.icon = wx.Icon(wx.Bitmap(icon_path))
 
         self.SetIcon(self.icon, game_name)
-        self.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.OnToggleHide)
+        #self.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.OnToggleHide)
+
+    def CreateMenuItem(self, menu, label, func):
+        item = wx.MenuItem(menu, -1, label)
+        menu.Bind(wx.EVT_MENU, func, id=item.GetId())
+        menu.Append(item)
+        return item
 
     def CreatePopupMenu(self):
         menu = wx.Menu()
-        create_menu_item(menu, 'Toggle Hide', self.OnToggleHide)
+        self.CreateMenuItem(menu, 'Toggle Hide', self.OnToggleHide)
         menu.AppendSeparator()
-        create_menu_item(menu, 'Exit', self.OnTaskBarClose)
+        self.CreateMenuItem(menu, 'Exit', self.OnTaskBarClose)
         return menu
 
-    def OnTaskBarActivate(self, evt):
+    def OnTaskBarActivate(self, event):
         pass
 
     def IconizeWindow(self, is_iconize):
@@ -711,10 +722,10 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
             self.frame.Show()
             self.frame.Restore()
 
-    def OnToggleHide(self, evt):
+    def OnToggleHide(self, event):
         self.IconizeWindow(not self.frame.IsIconized())
 
-    def OnTaskBarClose(self, evt):
+    def OnTaskBarClose(self, event):
         self.frame.Close()
 
 class MainPanel(wx.Panel):
@@ -732,7 +743,7 @@ class MainPanel(wx.Panel):
         self.Layout()
         self.Refresh()
 
-    def OnPaint(self, evt):
+    def OnPaint(self, event):
         dc = wx.BufferedPaintDC(self)
         self.Draw(dc)
 
@@ -1014,14 +1025,11 @@ class LauncherFrame(wx.Frame):
 
         self.log_uploader = None
 
-    def UpdateStatus(self, text):
-        logger.info(text)
-        self.label_update_status.SetLabel(text)
-
     def OnStatusUpdate(self, event):
         if not event.data:
             return
-        UpdateStatus(event.data)
+
+        self.label_update_status.SetLabel(event.data)
 
     def OnProgressUpdate(self, event):
         if not event.data:
