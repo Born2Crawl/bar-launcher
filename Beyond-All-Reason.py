@@ -736,7 +736,9 @@ class MainPanel(wx.Panel):
         scaled_background = self.bg.Scale(client_width, client_height, wx.IMAGE_QUALITY_HIGH)
         dc.DrawBitmap(wx.Bitmap(scaled_background), 0, 0)
 
-        font = wx.Font(24, wx.FONTFAMILY_SCRIPT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
+        font = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
+        if platform_manager.current_platform != 'Darwin':
+            font.AddPrivateFont('resources/fonts/Poppins-Bold.ttf')
         dc.SetFont(font)
         dc.SetTextForeground(wx.BLACK)
         dc.DrawText(game_name, 32, 32)
