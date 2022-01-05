@@ -1006,11 +1006,14 @@ class LauncherFrame(wx.Frame):
 
         self.log_uploader = None
 
+    def UpdateStatus(self, text):
+        logger.info(text)
+        self.label_update_status.SetLabel(text)
+
     def OnStatusUpdate(self, event):
         if not event.data:
             return
-        logger.info(event.data)
-        self.label_update_status.SetLabel(event.data)
+        UpdateStatus(event.data)
 
     def OnProgressUpdate(self, event):
         if not event.data:
@@ -1037,6 +1040,8 @@ class BARLauncher(wx.App):
     def OnInit(self):
         self.frame_launcher = LauncherFrame(None, wx.ID_ANY, "")
 
+        logger.info('BAR Launcher started')
+
         #self.config_manager = ConfigManager()
         self.frame_launcher.combobox_config.Clear()
         config_names = config_manager.get_compatible_configs_names()
@@ -1044,11 +1049,13 @@ class BARLauncher(wx.App):
             self.frame_launcher.combobox_config.Append(config_names)
             self.frame_launcher.combobox_config.SetSelection(0)
             self.frame_launcher.OnComboboxConfig()
+        else:
+            self.frame_launcher.UpdateStatus('No configs found for {platform} platform!'.format(platform=platform_manager.current_platform))
+            self.frame_launcher.button_start.Disable()
+            self.frame_launcher.checkbox_update.Disable()
 
         self.SetTopWindow(self.frame_launcher)
         self.frame_launcher.Show()
-
-        logger.info('BAR Launcher started')
 
         return True
 
