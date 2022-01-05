@@ -873,7 +873,9 @@ class LauncherFrame(wx.Frame):
         self.Layout()
         self.Centre()
 
-        self.Restore()
+        # Turn on and off StayOnTop flag as a trick to raise the window to front
+        self.ToggleWindowStyle(wx.STAY_ON_TOP)
+        self.ToggleWindowStyle(wx.STAY_ON_TOP)
 
         self.initial_size = self.GetSize()
         self.tray_icon = CustomTaskBarIcon(self, icon_path)
