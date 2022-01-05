@@ -199,20 +199,34 @@ class PlatformManager():
             'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/resources/icon.png',
             'path': file_manager.join_path(current_dir, 'resources', 'icon.png'),
         },
+        'font_file': {
+            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/resources/fonts/Poppins-Bold.ttf',
+            'path': file_manager.join_path(current_dir, 'resources', 'fonts', 'Poppins-Bold.ttf'),
+        },
     }
 
-    def get_resource_path(self, name):
-        return self.resources[name]['path']
+    def get_resource_path(self, resource_name):
+        return self.resources[resource_name]['path']
 
-    def get_resource_url(self, name):
-        return self.resources[name]['url']
+    def get_resource_url(self, resource_name):
+        return self.resources[resource_name]['url']
 
-    def download_resource(self, name):
-        resource_path = self.get_resource_path(name)
-        resource_url = self.get_resource_url(name)
+    def ensure_resource_exists(self, resource_name, force_download_fresh=True, ignore_download_fail=True):
+        resource_path = self.get_resource_path(resource_name)
 
-        logger.info(f'Trying to download {name} from {resource_url}')
-        http_downloader.download_file(resource_url, resource_path)
+        if not force_download_fresh and file_manager.file_exists(resource_path):
+            logger.info(f'File {resource_path} already exists, skipping download...')
+            return True
+
+        resource_url = self.get_resource_url(resource_name)
+        if not http_downloader.download_file(resource_url, resource_path):
+            if (ignore_download_fail and file_manager.file_exists(resource_path)):
+                logger.error(f'Downloading {resource_name} failed, will use the existing file!')
+                return True
+            else:
+                raise Exception(f'Couldn\'t find or download the {resource_name} to use!')
+
+        return True
 
     platform_binaries = {
         'Windows': {
@@ -478,10 +492,8 @@ class ConfigManager():
     def read_config(self):
         global logger
 
-        platform_manager.download_resource('launcher_config')
+        platform_manager.ensure_resource_exists('launcher_config', force_download_fresh=True, ignore_download_fail=True)
         launcher_config_path = platform_manager.get_resource_path('launcher_config')
-        if not file_manager.file_exists(launcher_config_path):
-            raise Exception('Couldn\'t find the config file to use!')
 
         logger.info(f'Reading the config file from {launcher_config_path}')
         f = open(launcher_config_path)
@@ -633,10 +645,7 @@ class UpdaterStarterThread(Thread):
             set_gauge_progress(current_progres_step)
             set_status_text(current_progres_step, total_progress_steps, 'updating lobby config')
 
-            platform_manager.download_resource('lobby_config')
-            lobby_config_path = platform_manager.get_resource_path('lobby_config')
-            if not file_manager.file_exists(lobby_config_path):
-                raise Exception('Couldn\'t find lobby config file to use!')
+            platform_manager.ensure_resource_exists('lobby_config', force_download_fresh=True, ignore_download_fail=True)
 
             logger.info('Starting the game')
             logger.info('================================================================================')
@@ -709,8 +718,9 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
         self.frame.Close()
 
 class MainPanel(wx.Panel):
-    def __init__(self, parent, background_path):
+    def __init__(self, parent, background_path, font_path):
         wx.Panel.__init__(self, parent=parent)
+        self.font_path = font_path
         self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
         self.bg = wx.Image(background_path, wx.BITMAP_TYPE_ANY)
         self.proportion = self.bg.GetWidth() / self.bg.GetHeight()
@@ -738,7 +748,8 @@ class MainPanel(wx.Panel):
 
         font = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
         if platform_manager.current_platform != 'Darwin':
-            font.AddPrivateFont('resources/fonts/Poppins-Bold.ttf')
+            if font.AddPrivateFont(self.font_path):
+                font.SetFaceName('Poppins')
         dc.SetFont(font)
         dc.SetTextForeground(wx.BLACK)
         dc.DrawText(game_name, 32, 32)
@@ -750,24 +761,19 @@ class LauncherFrame(wx.Frame):
     def __init__(self, *args, **kwds):
         global main_frame
 
+        platform_manager.ensure_resource_exists('icon_image', force_download_fresh=False, ignore_download_fail=False)
         icon_path = platform_manager.get_resource_path('icon_image')
-        if not file_manager.file_exists(icon_path):
-            platform_manager.download_resource('icon_image')
-        if not file_manager.file_exists(icon_path):
-            raise Exception('Couldn\'t find or download the icon image to use!')
-
+        platform_manager.ensure_resource_exists('background_image', force_download_fresh=False, ignore_download_fail=False)
         background_path = platform_manager.get_resource_path('background_image')
-        if not file_manager.file_exists(background_path):
-            platform_manager.download_resource('background_image')
-        if not file_manager.file_exists(background_path):
-            raise Exception('Couldn\'t find or download the background image to use!')
+        platform_manager.ensure_resource_exists('font_file', force_download_fresh=False, ignore_download_fail=False)
+        font_path = platform_manager.get_resource_path('font_file')
 
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
         self.SetSize((800, 380))
         self.SetTitle(game_name)
 
-        self.panel_main = MainPanel(self, background_path)
+        self.panel_main = MainPanel(self, background_path, font_path)
 
         sizer_main_vert = wx.BoxSizer(wx.VERTICAL)
 
