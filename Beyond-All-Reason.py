@@ -758,7 +758,7 @@ class MainPanel(wx.Panel):
         dc.DrawBitmap(wx.Bitmap(scaled_background), 0, 0)
 
         font = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
-        if platform_manager.current_platform == 'Windows':
+        if font.CanUsePrivateFont(): #platform_manager.current_platform == 'Windows':
             if font.AddPrivateFont(self.font_path):
                 font.SetFaceName('Poppins')
         dc.SetFont(font)
