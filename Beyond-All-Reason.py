@@ -758,9 +758,11 @@ class MainPanel(wx.Panel):
         dc.DrawBitmap(wx.Bitmap(scaled_background), 0, 0)
 
         font = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
-        if font.CanUsePrivateFont(): #platform_manager.current_platform == 'Windows':
+        try:
             if font.AddPrivateFont(self.font_path):
                 font.SetFaceName('Poppins')
+        except AttributeError:
+            pass
         dc.SetFont(font)
         dc.SetTextForeground(wx.BLACK)
         dc.DrawText(game_name, 32, 32)
