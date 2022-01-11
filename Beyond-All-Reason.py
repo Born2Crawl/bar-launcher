@@ -759,7 +759,7 @@ class MainPanel(wx.Panel):
 
         font = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
         try:
-            if font.AddPrivateFont(self.font_path):
+            if platform_manager.current_platform != 'Darwin' and font.AddPrivateFont(self.font_path):
                 font.SetFaceName('Poppins')
         except AttributeError:
             pass
@@ -1070,7 +1070,9 @@ class BARLauncher(wx.App):
             self.frame_launcher.combobox_config.SetSelection(0)
             self.frame_launcher.OnComboboxConfig()
         else:
-            self.frame_launcher.UpdateStatus('No configs found for {platform} platform!'.format(platform=platform_manager.current_platform))
+            message = 'No configs found for {platform} platform!'.format(platform=platform_manager.current_platform)
+            logger.info(message)
+            self.frame_launcher.label_update_status.SetLabel(message)
             self.frame_launcher.button_start.Disable()
             self.frame_launcher.checkbox_update.Disable()
 
