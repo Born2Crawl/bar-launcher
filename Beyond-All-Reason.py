@@ -671,8 +671,15 @@ class UpdaterStarterThread(Thread):
             # Starting the game
             start_args = config['launch']['start_args']
             engine = config['launch']['engine']
+            engine_dir = file_manager.join_path(self.data_dir, 'engine', engine)
             spring_command = platform_manager.get_executable_command('spring')
-            spring_command[0] = file_manager.join_path(self.data_dir, 'engine', engine, spring_command[0])
+            spring_command[0] = file_manager.join_path(engine_dir, spring_command[0])
+
+            if not file_manager.dir_exists(engine_dir) or not file_manager.file_exists(spring_command[0]):
+                if file_manager.dir_exists(engine_dir):
+                    file_manager.remove_dir(engine_dir) # Trying to remove a (hopfully) empty directory since spring executable is not there
+                raise Exception('Can\'t locate the engine version specified in the config file, please update to download it!')
+
             spring_command.extend(['--write-dir', self.data_dir, '--isolation'])
             spring_command.extend(start_args)
             if not process_starter.start_process(spring_command):
