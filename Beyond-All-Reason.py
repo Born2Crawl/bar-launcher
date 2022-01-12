@@ -739,8 +739,15 @@ class UpdaterStarterThread(Thread):
             # Starting the game
             start_args = config['launch']['start_args']
             engine = config['launch']['engine']
+            engine_dir = file_manager.join_path(self.data_dir, 'engine', engine)
             spring_command = platform_manager.get_executable_command('spring')
-            spring_command[0] = file_manager.join_path(self.data_dir, 'engine', engine, spring_command[0])
+            spring_command[0] = file_manager.join_path(engine_dir, spring_command[0])
+
+            if not file_manager.dir_exists(engine_dir) or not file_manager.file_exists(spring_command[0]):
+                if file_manager.dir_exists(engine_dir):
+                    file_manager.remove_dir(engine_dir) # Trying to remove a (hopfully) empty directory since spring executable is not there
+                raise Exception('Can\'t locate the engine version specified in the config file, please update to download it!')
+
             spring_command.extend(['--write-dir', self.data_dir, '--isolation'])
             spring_command.extend(start_args)
             if not process_starter.start_process(spring_command):
@@ -826,9 +833,11 @@ class MainPanel(wx.Panel):
         dc.DrawBitmap(wx.Bitmap(scaled_background), 0, 0)
 
         font = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
-        if platform_manager.current_platform != 'Darwin':
-            if font.AddPrivateFont(self.font_path):
+        try:
+            if platform_manager.current_platform != 'Darwin' and font.AddPrivateFont(self.font_path):
                 font.SetFaceName('Poppins')
+        except AttributeError:
+            pass
         dc.SetFont(font)
         dc.SetTextForeground(wx.BLACK)
         dc.DrawText(game_name, 32, 32)
@@ -941,7 +950,9 @@ class LauncherFrame(wx.Frame):
         self.Layout()
         self.Centre()
 
-        self.Restore()
+        # Turn on and off StayOnTop flag as a trick to raise the window to front
+        self.ToggleWindowStyle(wx.STAY_ON_TOP)
+        self.ToggleWindowStyle(wx.STAY_ON_TOP)
 
         self.initial_size = self.GetSize()
         self.tray_icon = CustomTaskBarIcon(self, icon_path)
@@ -1134,7 +1145,9 @@ class BARLauncher(wx.App):
             self.frame_launcher.combobox_config.SetSelection(0)
             self.frame_launcher.OnComboboxConfig()
         else:
-            self.frame_launcher.UpdateStatus('No configs found for {platform} platform!'.format(platform=platform_manager.current_platform))
+            message = 'No configs found for {platform} platform!'.format(platform=platform_manager.current_platform)
+            logger.info(message)
+            self.frame_launcher.label_update_status.SetLabel(message)
             self.frame_launcher.button_start.Disable()
             self.frame_launcher.checkbox_update.Disable()
 
