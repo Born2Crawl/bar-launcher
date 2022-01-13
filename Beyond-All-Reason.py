@@ -219,7 +219,7 @@ class PlatformManager():
             'path': file_manager.join_path(current_dir, 'resources', 'fonts', 'Poppins-Bold.ttf'),
         },
         'file_hashes': {
-            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/dist.md5',
+            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/self-update/dist/dist.md5',
             'path': file_manager.join_path(current_dir, 'dist.md5'),
         },
     }
@@ -253,7 +253,7 @@ class PlatformManager():
                 'command': ['Beyond-All-Reason.exe'],
                 'path': '',
                 'downloads': [
-                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/Beyond-All-Reason.exe',
+                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/self-update/dist/Beyond-All-Reason.exe',
                 ],
             },
             '7zip': {
@@ -284,7 +284,7 @@ class PlatformManager():
                 'command': ['Beyond-All-Reason'],
                 'path': '',
                 'downloads': [
-                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/Beyond-All-Reason',
+                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/self-update/dist/Beyond-All-Reason',
                 ],
             },
             '7zip': {
@@ -313,7 +313,7 @@ class PlatformManager():
                 'command': ['Beyond-All-Reason'],
                 'path': '',
                 'downloads': [
-                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/Beyond-All-Reason',
+                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/self-update/dist/Beyond-All-Reason',
                 ],
             },
             '7zip': {
