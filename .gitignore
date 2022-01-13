@@ -3,10 +3,6 @@ data/*
 config.json
 *.bak
 
-# BAR executables
-Beyond-All-Reason
-Beyond-All-Reason.exe
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -19,7 +15,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+#dist/
 downloads/
 eggs/
 .eggs/

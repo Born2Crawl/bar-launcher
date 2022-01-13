@@ -219,8 +219,8 @@ class PlatformManager():
             'path': file_manager.join_path(current_dir, 'resources', 'fonts', 'Poppins-Bold.ttf'),
         },
         'file_hashes': {
-            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/bar-launcher.md5',
-            'path': file_manager.join_path(current_dir, 'bar-launcher.md5'),
+            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/dist.md5',
+            'path': file_manager.join_path(current_dir, 'dist.md5'),
         },
     }
 
