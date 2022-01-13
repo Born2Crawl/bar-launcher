@@ -8,8 +8,10 @@ import sys
 import json
 import stat
 import time
+import shutil
 import hashlib
 import logging
+import tempfile
 import platform
 import pyperclip
 import requests
@@ -134,6 +136,9 @@ class FileManager():
     def get_current_dir(self):
         return os.getcwd()
 
+    def get_temp_dir(self):
+        return tempfile.gettempdir()
+
     def join_path(self, *args):
         return os.path.join(*args)
 
@@ -157,6 +162,9 @@ class FileManager():
 
     def make_dirs(self, path):
         return os.makedirs(path, exist_ok=True)
+
+    def rename(self, current_path, new_path):
+        return os.rename(current_path, new_path)
 
     def rename(self, current_path, new_path):
         return os.rename(current_path, new_path)
@@ -344,26 +352,38 @@ class PlatformManager():
 
         return command
 
-    def download_executable(self, name):
-        current_platform = self.current_platform
-        executable_dir = self.executable_dir
+    def get_download_dir(self, name):
+        # Add a case for libraries in /lib/ directory
+        if name == 'launcher':
+            download_dir = file_manager.get_temp_dir()
+        else:
+            download_dir = self.executable_dir
 
+        return download_dir
+
+    def download_executable(self, name, overwrite_existing=False):
+        current_platform = self.current_platform
         if not 'downloads' in self.platform_binaries[current_platform][name]:
+            logger.error(f'No downloads found for {name}!')
             return
 
+        download_dir = self.get_download_dir(name)
         command = self.get_executable_command(name)
         executable = command[0]
 
-        if not file_manager.file_exists(executable):
+        # Only download the missing executables
+        if not file_manager.file_exists(executable) or overwrite_existing:
             logger.warning(f'Executable wasn\'t found in: {executable}')
             logger.info('Downloading executable files...')
-            file_manager.make_dirs(executable_dir)
+            file_manager.make_dirs(download_dir)
             for url in self.platform_binaries[current_platform][name]['downloads']:
-                if not http_downloader.download_file(url, executable_dir):
-                    raise Exception('Couldn\'t download the archive extractor!')
+                if not http_downloader.download_file(url, download_dir):
+                    raise Exception(f'Couldn\'t download the {name}!')
             # Setting executable flag
             st = os.stat(executable)
             os.chmod(executable, st.st_mode | stat.S_IEXEC)
+        else:
+            logger.warning('Executable already exists!')
 
 platform_manager = PlatformManager()
 
@@ -581,7 +601,7 @@ class UpdaterStarterThread(Thread):
         current_progres_step = 0
 
         def calc_file_md5(path):
-            with open(sys.argv[0], 'rb') as f:
+            with open(path, 'rb') as f:
                 file_hash = hashlib.md5()
                 chunk = f.read(8192)
                 while chunk:
@@ -640,9 +660,10 @@ class UpdaterStarterThread(Thread):
                 platform_manager.ensure_resource_exists('file_hashes', force_download_fresh=True, ignore_download_fail=True)
                 file_hashes_path = platform_manager.get_resource_path('file_hashes')
 
-                self_full_path = file_manager.get_full_path(sys.argv[0])
-                self_file_name = file_manager.extract_filename(self_full_path)
-                self_file_md5 = calc_file_md5(self_full_path)
+                launcher_command = platform_manager.get_executable_command('launcher')
+                launcher_file_name =  file_manager.extract_filename(launcher_command[0])
+                launcher_full_path = file_manager.join_path(platform_manager.current_dir, launcher_file_name)
+                launcher_file_md5 = calc_file_md5(launcher_full_path)
 
                 f = open(file_hashes_path, 'r')
                 file_hashes_lines = f.readlines()
@@ -651,12 +672,15 @@ class UpdaterStarterThread(Thread):
                     update_filename_hash = line.split()
                     update_filename = update_filename_hash[1].lstrip('*')
                     update_hash = update_filename_hash[0]
-                    if update_filename == self_file_name:
-                        if self_file_md5 == update_hash:
+                    if update_filename == launcher_file_name:
+                        if launcher_file_md5 == update_hash:
                             logger.info(f'{update_filename} hash matches the latest version hash ({update_hash}), no update needed')
                         else:
-                            logger.info(f'{update_filename} hash ({self_file_md5}) doesn\'t match the latest version hash ({update_hash}), update needed!')
-                            #platform_manager.download_executable('launcher')
+                            logger.info(f'{update_filename} hash ({launcher_file_md5}) doesn\'t match the latest version hash ({update_hash}), update needed!')
+                            platform_manager.download_executable('launcher', overwrite_existing=True)
+                            new_full_path = file_manager.join_path(platform_manager.get_download_dir('launcher'), launcher_file_name)
+                            process_starter.start_process([new_full_path, '--upgrade', launcher_full_path], nowait=True)
+                            sys.exit()
 
                 logger.info('Updating the game repositories')
                 for n in pr_downloader_games:
@@ -1157,6 +1181,14 @@ class BARLauncher(wx.App):
         return True
 
 if __name__ == "__main__":
+    if len(sys.argv) > 2 and sys.argv[1] == '--upgrade':
+        logger.info('Upgrading BAR Launcher...')
+        time.sleep(3)
+        shutil.copy(sys.argv[0], sys.argv[2])
+        logger.info('Start BAR Launcher again...')
+        process_starter.start_process([sys.argv[2]], nowait=True)
+        sys.exit()
+
     # Ugly workaround to hide a black console window on Windows (can't use "pyinstaller --noconsole" because it disables stdout completely)
     if platform.system() == 'Windows':
         if getattr(sys, 'frozen', False):
