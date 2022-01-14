@@ -451,7 +451,7 @@ class ArchiveExtractor():
 
         platform_manager.ensure_executable_exists('7zip')
 
-        zip_command = platform_manager.get_executable_command('7zip')
+        zip_command = platform_manager.get_executable_full_command('7zip')
         zip_executable = zip_command[0]
         logger.info(f'Extracting archive: "{archive_name}" "{destination}"')
         zip_command.extend(['x', archive_name, '-y', f'-o{destination}'])
@@ -473,7 +473,7 @@ class HttpDownloader():
             logger.info(f'Creating directories for "{target_file}" if needed...')
             file_manager.make_dirs(file_manager.extract_dir_name(target_file))
 
-            response = requests.get(source_url, allow_redirects=True, timeout=5)
+            response = requests.get(source_url, allow_redirects=True, timeout=3)
             if response.status_code >= 300:
                 raise Exception('Bad response: {status_code} ({content})'.format(status_code=str(response.status_code), content=response.content.decode('utf-8')))
 
@@ -494,7 +494,7 @@ class PrDownloader():
         platform_manager.ensure_executable_exists('pr_downloader')
 
         logger.info(f'Downloading: "{game_name}" to: "{data_dir}"')
-        command = platform_manager.get_executable_command('pr_downloader')
+        command = platform_manager.get_executable_full_command('pr_downloader')
         command.extend(['--filesystem-writepath', data_dir, '--download-game', game_name])
         return process_starter.start_process(command)
 
