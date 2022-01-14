@@ -395,7 +395,7 @@ class PlatformManager():
         executable_full_path = full_command[0]
 
         # Only download the missing executables
-        if not file_manager.file_exists(executable):
+        if not file_manager.file_exists(executable_full_path):
             logger.warning(f'Executable wasn\'t found in: {executable_full_path}')
             self.download_executable(name, target_dir)
         else:
@@ -473,7 +473,7 @@ class HttpDownloader():
             logger.info(f'Creating directories for "{target_file}" if needed...')
             file_manager.make_dirs(file_manager.extract_dir_name(target_file))
 
-            response = requests.get(source_url, allow_redirects=True, timeout=3)
+            response = requests.get(source_url, allow_redirects=True, timeout=5)
             if response.status_code >= 300:
                 raise Exception('Bad response: {status_code} ({content})'.format(status_code=str(response.status_code), content=response.content.decode('utf-8')))
 
