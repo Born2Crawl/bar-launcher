@@ -342,46 +342,62 @@ class PlatformManager():
         },
     }
 
-    def get_executable_command(self, name):
+    def get_executable_path(self, name):
         current_platform = self.current_platform
         current_dir = self.current_dir
 
-        command = list(self.platform_binaries[current_platform][name]['command'])
         if 'path' in self.platform_binaries[current_platform][name]:
-            command[0] = file_manager.join_path(current_dir, self.platform_binaries[current_platform][name]['path'], command[0])
+            return file_manager.join_path(current_dir, self.platform_binaries[current_platform][name]['path'])
+
+        return ''
+
+    def get_executable_command(self, name):
+        current_platform = self.current_platform
+
+        command = list(self.platform_binaries[current_platform][name]['command'])
 
         return command
 
-    def get_download_dir(self, name):
-        # Add a case for libraries in /lib/ directory
-        if name == 'launcher':
-            download_dir = file_manager.get_temp_dir()
-        else:
-            download_dir = self.executable_dir
-
-        return download_dir
-
-    def download_executable(self, name, overwrite_existing=False):
+    def get_executable_full_command(self, name):
         current_platform = self.current_platform
+        current_dir = self.current_dir
+
+        command = self.get_executable_command(name)
+        command[0] = file_manager.join_path(self.get_executable_path(name), command[0])
+
+        return command
+
+    def download_executable(self, name, target_dir):
+        current_platform = self.current_platform
+        current_dir = self.current_dir
+
         if not 'downloads' in self.platform_binaries[current_platform][name]:
             logger.error(f'No downloads found for {name}!')
             return
 
-        download_dir = self.get_download_dir(name)
-        command = self.get_executable_command(name)
-        executable = command[0]
+        executable = self.get_executable_command(name)[0]
+        executable_full_path = file_manager.join_path(target_dir, executable)
+
+        logger.info('Downloading executable files...')
+        file_manager.make_dirs(target_dir)
+
+        for url in self.platform_binaries[current_platform][name]['downloads']:
+            if not http_downloader.download_file(url, target_dir):
+                raise Exception(f'Couldn\'t download the {name}!')
+
+        logger.info(f'Setting the executable flag on {executable_full_path}')
+        st = os.stat(executable_full_path)
+        os.chmod(executable_full_path, st.st_mode | stat.S_IEXEC)
+
+    def ensure_executable_exists(self, name):
+        target_dir = self.get_executable_path(name)
+        full_command = self.get_executable_full_command(name)
+        executable_full_path = full_command[0]
 
         # Only download the missing executables
-        if not file_manager.file_exists(executable) or overwrite_existing:
-            logger.warning(f'Executable wasn\'t found in: {executable}')
-            logger.info('Downloading executable files...')
-            file_manager.make_dirs(download_dir)
-            for url in self.platform_binaries[current_platform][name]['downloads']:
-                if not http_downloader.download_file(url, download_dir):
-                    raise Exception(f'Couldn\'t download the {name}!')
-            # Setting executable flag
-            st = os.stat(executable)
-            os.chmod(executable, st.st_mode | stat.S_IEXEC)
+        if not file_manager.file_exists(executable):
+            logger.warning(f'Executable wasn\'t found in: {executable_full_path}')
+            self.download_executable(name, target_dir)
         else:
             logger.warning('Executable already exists!')
 
@@ -433,7 +449,7 @@ class ArchiveExtractor():
     def extract_7zip(self, archive_name, destination):
         global logger
 
-        platform_manager.download_executable('7zip')
+        platform_manager.ensure_executable_exists('7zip')
 
         zip_command = platform_manager.get_executable_command('7zip')
         zip_executable = zip_command[0]
@@ -475,7 +491,7 @@ class PrDownloader():
     def download_game(self, data_dir, game_name):
         global logger
 
-        platform_manager.download_executable('pr_downloader')
+        platform_manager.ensure_executable_exists('pr_downloader')
 
         logger.info(f'Downloading: "{game_name}" to: "{data_dir}"')
         command = platform_manager.get_executable_command('pr_downloader')
@@ -660,9 +676,8 @@ class UpdaterStarterThread(Thread):
                 platform_manager.ensure_resource_exists('file_hashes', force_download_fresh=True, ignore_download_fail=True)
                 file_hashes_path = platform_manager.get_resource_path('file_hashes')
 
-                launcher_command = platform_manager.get_executable_command('launcher')
-                launcher_file_name =  file_manager.extract_filename(launcher_command[0])
-                launcher_full_path = file_manager.join_path(platform_manager.current_dir, launcher_file_name)
+                launcher_file_name = platform_manager.get_executable_command('launcher')[0]
+                launcher_full_path = platform_manager.get_executable_full_command('launcher')[0]
                 launcher_file_md5 = calc_file_md5(launcher_full_path)
 
                 f = open(file_hashes_path, 'r')
@@ -677,8 +692,10 @@ class UpdaterStarterThread(Thread):
                             logger.info(f'{update_filename} hash matches the latest version hash ({update_hash}), no update needed')
                         else:
                             logger.info(f'{update_filename} hash ({launcher_file_md5}) doesn\'t match the latest version hash ({update_hash}), update needed!')
-                            platform_manager.download_executable('launcher', overwrite_existing=True)
-                            new_full_path = file_manager.join_path(platform_manager.get_download_dir('launcher'), launcher_file_name)
+                            temp_dir = file_manager.get_temp_dir()
+
+                            platform_manager.download_executable('launcher', temp_dir)
+                            new_full_path = file_manager.join_path(temp_dir, launcher_file_name)
                             process_starter.start_process([new_full_path, '--upgrade', launcher_full_path], nowait=True)
                             sys.exit()
 
