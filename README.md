@@ -27,7 +27,13 @@ python3 Beyond-All-Reason.py
 pyinstaller -y --clean --onefile --icon resources/icon.ico Beyond-All-Reason.py
 ```
 
-### 4. Copy and run the executable
+### 4. Update MD5 hashes for the build executables
+Linux/MacOS:
+```bash
+cd ./dist/ && md5sum Beyond-All-Reason* > dist.md5 && cd ..
+```
+
+### 5. Copy and run the executable
 Linux/MacOS:
 ```bash
 cp ./dist/Beyond-All-Reason .
