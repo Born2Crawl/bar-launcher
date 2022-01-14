@@ -3,6 +3,11 @@ data/*
 config.json
 *.bak
 
+# BAR executables anhd downloaded hashes
+/Beyond-All-Reason
+/Beyond-All-Reason.exe
+/dist.md5
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
