@@ -396,10 +396,10 @@ class PlatformManager():
 
         # Only download the missing executables
         if not file_manager.file_exists(executable_full_path):
-            logger.warning(f'Executable wasn\'t found in: {executable_full_path}')
+            logger.warning(f'Executable for {name} wasn\'t found in: {executable_full_path}')
             self.download_executable(name, target_dir)
         else:
-            logger.warning('Executable already exists!')
+            logger.info(f'Executable for {name} already exists')
 
 platform_manager = PlatformManager()
 
@@ -482,8 +482,8 @@ class HttpDownloader():
             logger.error('Download failed:')
             e = str(sys.exc_info()[1])
             logger.error(e)
-            return False
-        return True
+            return None
+        return target_file
 
 http_downloader = HttpDownloader()
 
@@ -599,9 +599,6 @@ config_manager = ConfigManager()
 
 # Thread class that executes Update/Start
 class UpdaterStarterThread(Thread):
-    data_dir = platform_manager.data_dir
-    temp_archive_name = file_manager.join_path(data_dir, 'download.7z')
-
     def __init__(self, is_update):
         Thread.__init__(self)
         self.is_update = is_update
@@ -708,7 +705,7 @@ class UpdaterStarterThread(Thread):
                     set_gauge_progress(current_progres_step)
                     set_status_text(current_progres_step, total_progress_steps, f'updating {game}')
 
-                    if not pr_downloader.download_game(self.data_dir, game):
+                    if not pr_downloader.download_game(platform_manager.data_dir, game):
                         raise Exception(f'Error updating {n}!')
 
                 logger.info('Updating the engine and additional resources')
@@ -720,7 +717,7 @@ class UpdaterStarterThread(Thread):
                     logger.info('================================================================================')
                     resource = http_resources[n]
                     destination = resource['destination']
-                    destination_path = file_manager.join_path(self.data_dir, resource['destination'])
+                    destination_path = file_manager.join_path(platform_manager.data_dir, resource['destination'])
 
                     set_status_text(current_progres_step, total_progress_steps, f'updating {destination}')
 
@@ -731,30 +728,31 @@ class UpdaterStarterThread(Thread):
                     url = resource['url']
                     is_extract = 'extract' in resource and resource['extract']
 
-                    if not http_downloader.download_file(url, self.temp_archive_name):
+                    downloaded_file = http_downloader.download_file(url, file_manager.get_temp_dir())
+                    if not downloaded_file:
                         raise Exception(f'Error downloading: {url}!')
 
                     if is_extract:
-                        if file_manager.file_exists(self.temp_archive_name):
-                            logger.info(f'Creating directories: "{destination_path}"')
+                        if file_manager.file_exists(downloaded_file):
+                            logger.info(f'Creating target directories: "{destination_path}"')
                             file_manager.make_dirs(destination_path)
 
-                            if not archive_extractor.extract_7zip(self.temp_archive_name, destination_path):
+                            if not archive_extractor.extract_7zip(downloaded_file, destination_path):
                                 file_manager.remove_dir(destination_path) # Removing a (hopefully) empty directory
-                                raise Exception(f'Error extracting {self.temp_archive_name}!')
+                                raise Exception(f'Error extracting {downloaded_file}!')
 
-                            logger.info(f'Removing a temp file: "{self.temp_archive_name}"')
-                            file_manager.remove(self.temp_archive_name)
+                            logger.info(f'Removing a temp file: "{downloaded_file}"')
+                            file_manager.remove(downloaded_file)
                         else:
                             logger.info('Downloaded file didn\'t exist!')
                     else:
-                        if file_manager.file_exists(self.temp_archive_name):
+                        if file_manager.file_exists(downloaded_file):
                             destination_path_dir = file_manager.extract_dir_name(destination_path)
-                            logger.info(f'Creating directories: "{destination_path_dir}"')
+                            logger.info(f'Creating target directories: "{destination_path_dir}"')
                             file_manager.make_dirs(destination_path_dir)
 
-                            logger.info(f'Renaming a temp file: "{self.temp_archive_name}" to: "{destination_path}"')
-                            file_manager.rename(self.temp_archive_name, destination_path)
+                            logger.info(f'Renaming a temp file: "{downloaded_file}" to: "{destination_path}"')
+                            file_manager.rename(downloaded_file, destination_path)
                         else:
                             logger.info('Downloaded file didn\'t exist!')
 
@@ -780,7 +778,7 @@ class UpdaterStarterThread(Thread):
             # Starting the game
             start_args = config['launch']['start_args']
             engine = config['launch']['engine']
-            engine_dir = file_manager.join_path(self.data_dir, 'engine', engine)
+            engine_dir = file_manager.join_path(platform_manager.data_dir, 'engine', engine)
             spring_command = platform_manager.get_executable_command('spring')
             spring_command[0] = file_manager.join_path(engine_dir, spring_command[0])
 
@@ -789,7 +787,7 @@ class UpdaterStarterThread(Thread):
                     file_manager.remove_dir(engine_dir) # Trying to remove a (hopfully) empty directory since spring executable is not there
                 raise Exception('Can\'t locate the engine version specified in the config file, please update to download it!')
 
-            spring_command.extend(['--write-dir', self.data_dir, '--isolation'])
+            spring_command.extend(['--write-dir', platform_manager.data_dir, '--isolation'])
             spring_command.extend(start_args)
             if not process_starter.start_process(spring_command):
                 raise Exception('Error while running the game!')
