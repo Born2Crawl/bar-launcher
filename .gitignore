@@ -2,6 +2,7 @@
 data/*
 config.json
 *.bak
+/resources/backgrounds
 
 # BAR executables anhd downloaded hashes
 /Beyond-All-Reason
