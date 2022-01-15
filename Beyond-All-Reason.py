@@ -8,6 +8,7 @@ import sys
 import json
 import stat
 import time
+import random
 import shutil
 import hashlib
 import logging
@@ -206,10 +207,36 @@ class PlatformManager():
             'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/files/chobby_config.json',
             'path': file_manager.join_path(data_dir, 'chobby_config.json'),
         },
-        'background_image': {
-            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/resources/background.png',
-            'path': file_manager.join_path(current_dir, 'resources', 'background.png'),
-        },
+        'background_image': [
+            {
+                'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/renderer/images/backgrounds/1.png',
+                'path': file_manager.join_path(current_dir, 'resources', 'backgrounds', '1.png'),
+            },
+            {
+                'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/renderer/images/backgrounds/2.png',
+                'path': file_manager.join_path(current_dir, 'resources', 'backgrounds', '2.png'),
+            },
+            {
+                'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/renderer/images/backgrounds/3.png',
+                'path': file_manager.join_path(current_dir, 'resources', 'backgrounds', '3.png'),
+            },
+            {
+                'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/renderer/images/backgrounds/4.png',
+                'path': file_manager.join_path(current_dir, 'resources', 'backgrounds', '4.png'),
+            },
+            {
+                'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/renderer/images/backgrounds/5.png',
+                'path': file_manager.join_path(current_dir, 'resources', 'backgrounds', '5.png'),
+            },
+            {
+                'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/renderer/images/backgrounds/6.png',
+                'path': file_manager.join_path(current_dir, 'resources', 'backgrounds', '6.png'),
+            },
+            {
+                'url': 'https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/renderer/images/backgrounds/7.png',
+                'path': file_manager.join_path(current_dir, 'resources', 'backgrounds', '7.png'),
+            },
+        ],
         'icon_image': {
             'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/resources/icon.png',
             'path': file_manager.join_path(current_dir, 'resources', 'icon.png'),
@@ -219,31 +246,37 @@ class PlatformManager():
             'path': file_manager.join_path(current_dir, 'resources', 'fonts', 'Poppins-Bold.ttf'),
         },
         'file_hashes': {
-            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/self-update/dist/dist.md5',
+            'url': 'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/dist.md5',
             'path': file_manager.join_path(current_dir, 'dist.md5'),
         },
     }
 
     def get_resource_path(self, resource_name):
+        if isinstance(self.resources[resource_name], list):
+            return random.choice(self.resources[resource_name])['path']
+
         return self.resources[resource_name]['path']
 
-    def get_resource_url(self, resource_name):
-        return self.resources[resource_name]['url']
-
     def ensure_resource_exists(self, resource_name, force_download_fresh=True, ignore_download_fail=True):
-        resource_path = self.get_resource_path(resource_name)
+        if not isinstance(self.resources[resource_name], list):
+            resources_list = [self.resources[resource_name]]
+        else:
+            resources_list = self.resources[resource_name]
 
-        if not force_download_fresh and file_manager.file_exists(resource_path):
-            logger.info(f'File {resource_path} already exists, skipping download...')
-            return True
+        for resource in resources_list:
+            resource_path = resource['path']
+            resource_url = resource['url']
 
-        resource_url = self.get_resource_url(resource_name)
-        if not http_downloader.download_file(resource_url, resource_path):
-            if (ignore_download_fail and file_manager.file_exists(resource_path)):
-                logger.error(f'Downloading {resource_name} failed, will use the existing file!')
-                return True
-            else:
-                raise Exception(f'Couldn\'t find or download the {resource_name} to use!')
+            if not force_download_fresh and file_manager.file_exists(resource_path):
+                #logger.info(f'File {resource_path} already exists, skipping download...')
+                continue
+
+            if not http_downloader.download_file(resource_url, resource_path):
+                if (ignore_download_fail and file_manager.file_exists(resource_path)):
+                    logger.error(f'Downloading {resource_name} failed, will use the existing file!')
+                    continue
+                else:
+                    raise Exception(f'Couldn\'t find or download the {resource_name} to use!')
 
         return True
 
@@ -253,7 +286,7 @@ class PlatformManager():
                 'command': ['Beyond-All-Reason.exe'],
                 'path': '',
                 'downloads': [
-                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/self-update/dist/Beyond-All-Reason.exe',
+                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/Beyond-All-Reason.exe',
                 ],
             },
             '7zip': {
@@ -284,7 +317,7 @@ class PlatformManager():
                 'command': ['Beyond-All-Reason'],
                 'path': '',
                 'downloads': [
-                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/self-update/dist/Beyond-All-Reason',
+                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/Beyond-All-Reason',
                 ],
             },
             '7zip': {
@@ -313,7 +346,7 @@ class PlatformManager():
                 'command': ['Beyond-All-Reason'],
                 'path': '',
                 'downloads': [
-                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/self-update/dist/Beyond-All-Reason',
+                    'https://raw.githubusercontent.com/Born2Crawl/bar-launcher/main/dist/Beyond-All-Reason',
                 ],
             },
             '7zip': {
