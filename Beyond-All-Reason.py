@@ -269,17 +269,28 @@ class PlatformManager():
                 logger.error(f'Downloading {resource_name} failed, will use the existing file!')
                 return True
             else:
-                raise Exception(f'Couldn\'t find or download the {resource_name} to use!')
+                return False
 
         return True
 
     def get_resource_local_path(self, resource_name, force_download_fresh=True, ignore_download_fail=True):
         if isinstance(self.resources[resource_name], list):
-            resource_num = random.randrange(len(self.resources[resource_name]))
-            self.ensure_resource_exists(resource_name, force_download_fresh, ignore_download_fail, resource_num)
-            return self.resources[resource_name][resource_num]['path']
+            resources_list = self.resources[resource_name].copy()
+            while True:
+                # Trying to pick a random resource from the list and download it
+                resource_num = random.randrange(len(resources_list))
+                if self.ensure_resource_exists(resource_name, force_download_fresh, ignore_download_fail, resource_num) or ignore_download_fail:
+                    break # Exiting the loop after successfully downloading a resource
 
-        self.ensure_resource_exists(resource_name, force_download_fresh, ignore_download_fail)
+                resources_list.pop(resource_num) # Removing a failed resource from the list
+                if len(resources_list) <= 0:
+                    raise Exception(f'Couldn\'t find or download any of the {resource_name} to use!')
+
+            return resources_list[resource_num]['path']
+
+        if not self.ensure_resource_exists(resource_name, force_download_fresh, ignore_download_fail):
+            raise Exception(f'Couldn\'t find or download the {resource_name} to use!')
+
         return self.resources[resource_name]['path']
 
     platform_binaries = {
