@@ -279,6 +279,7 @@ class PlatformManager():
             self.ensure_resource_exists(resource_name, force_download_fresh, ignore_download_fail, resource_num)
             return self.resources[resource_name][resource_num]['path']
 
+        self.ensure_resource_exists(resource_name, force_download_fresh, ignore_download_fail)
         return self.resources[resource_name]['path']
 
     platform_binaries = {
