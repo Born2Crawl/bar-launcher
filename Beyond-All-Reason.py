@@ -251,34 +251,35 @@ class PlatformManager():
         },
     }
 
-    def get_resource_path(self, resource_name):
+    def ensure_resource_exists(self, resource_name, force_download_fresh=True, ignore_download_fail=True, resource_num=0):
         if isinstance(self.resources[resource_name], list):
-            return random.choice(self.resources[resource_name])['path']
-
-        return self.resources[resource_name]['path']
-
-    def ensure_resource_exists(self, resource_name, force_download_fresh=True, ignore_download_fail=True):
-        if not isinstance(self.resources[resource_name], list):
-            resources_list = [self.resources[resource_name]]
+            resource = self.resources[resource_name][resource_num]
         else:
-            resources_list = self.resources[resource_name]
+            resource = self.resources[resource_name]
 
-        for resource in resources_list:
-            resource_path = resource['path']
-            resource_url = resource['url']
+        resource_path = resource['path']
+        resource_url = resource['url']
 
-            if not force_download_fresh and file_manager.file_exists(resource_path):
-                #logger.info(f'File {resource_path} already exists, skipping download...')
-                continue
+        if not force_download_fresh and file_manager.file_exists(resource_path):
+            #logger.info(f'File {resource_path} already exists, skipping download...')
+            return True
 
-            if not http_downloader.download_file(resource_url, resource_path):
-                if (ignore_download_fail and file_manager.file_exists(resource_path)):
-                    logger.error(f'Downloading {resource_name} failed, will use the existing file!')
-                    continue
-                else:
-                    raise Exception(f'Couldn\'t find or download the {resource_name} to use!')
+        if not http_downloader.download_file(resource_url, resource_path):
+            if (ignore_download_fail and file_manager.file_exists(resource_path)):
+                logger.error(f'Downloading {resource_name} failed, will use the existing file!')
+                return True
+            else:
+                raise Exception(f'Couldn\'t find or download the {resource_name} to use!')
 
         return True
+
+    def get_resource_local_path(self, resource_name, force_download_fresh=True, ignore_download_fail=True):
+        if isinstance(self.resources[resource_name], list):
+            resource_num = random.randrange(len(self.resources[resource_name]))
+            self.ensure_resource_exists(resource_name, force_download_fresh, ignore_download_fail, resource_num)
+            return self.resources[resource_name][resource_num]['path']
+
+        return self.resources[resource_name]['path']
 
     platform_binaries = {
         'Windows': {
@@ -596,8 +597,7 @@ class ConfigManager():
     def read_config(self):
         global logger
 
-        platform_manager.ensure_resource_exists('launcher_config', force_download_fresh=True, ignore_download_fail=True)
-        launcher_config_path = platform_manager.get_resource_path('launcher_config')
+        launcher_config_path = platform_manager.get_resource_local_path('launcher_config', force_download_fresh=True, ignore_download_fail=True)
 
         logger.info(f'Reading the config file from {launcher_config_path}')
         f = open(launcher_config_path)
@@ -703,8 +703,7 @@ class UpdaterStarterThread(Thread):
                 set_gauge_progress(current_progres_step)
                 set_status_text(current_progres_step, total_progress_steps, 'checking for self-update')
 
-                platform_manager.ensure_resource_exists('file_hashes', force_download_fresh=True, ignore_download_fail=True)
-                file_hashes_path = platform_manager.get_resource_path('file_hashes')
+                file_hashes_path = platform_manager.get_resource_local_path('file_hashes', force_download_fresh=True, ignore_download_fail=True)
 
                 launcher_file_name = platform_manager.get_executable_command('launcher')[0]
                 launcher_full_path = platform_manager.get_executable_full_command('launcher')[0]
@@ -796,7 +795,7 @@ class UpdaterStarterThread(Thread):
             set_gauge_progress(current_progres_step)
             set_status_text(current_progres_step, total_progress_steps, 'updating lobby config')
 
-            platform_manager.ensure_resource_exists('lobby_config', force_download_fresh=True, ignore_download_fail=True)
+            lobby_config_path = platform_manager.get_resource_local_path('lobby_config', force_download_fresh=True, ignore_download_fail=True)
 
             logger.info('Starting the game')
             logger.info('================================================================================')
@@ -921,12 +920,9 @@ class LauncherFrame(wx.Frame):
     def __init__(self, *args, **kwds):
         global main_frame
 
-        platform_manager.ensure_resource_exists('icon_image', force_download_fresh=False, ignore_download_fail=False)
-        icon_path = platform_manager.get_resource_path('icon_image')
-        platform_manager.ensure_resource_exists('background_image', force_download_fresh=False, ignore_download_fail=False)
-        background_path = platform_manager.get_resource_path('background_image')
-        platform_manager.ensure_resource_exists('font_file', force_download_fresh=False, ignore_download_fail=False)
-        font_path = platform_manager.get_resource_path('font_file')
+        icon_path = platform_manager.get_resource_local_path('icon_image', force_download_fresh=False, ignore_download_fail=False)
+        background_path = platform_manager.get_resource_local_path('background_image', force_download_fresh=False, ignore_download_fail=False)
+        font_path = platform_manager.get_resource_local_path('font_file', force_download_fresh=False, ignore_download_fail=False)
 
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
