@@ -1,5 +1,5 @@
 # bar-launcher
-Simple Python launcher/updated for Beyond All Reason (BAR)
+Simple Python launcher/updater for Beyond All Reason (BAR)
 
 ## Steps build and run the launcher
 
