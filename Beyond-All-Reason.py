@@ -992,6 +992,7 @@ class LauncherFrame(wx.Frame):
         sizer_bottom_left_vert.Add((80, 20), 0, wx.ALL, 2)
 
         self.panel_status = wx.Panel(self.panel_main, wx.ID_ANY, style=wx.BORDER_STATIC)
+        self.panel_status.SetBackgroundColour(wx.Colour(236, 236, 236))
         sizer_bottom_left_vert.Add(self.panel_status, 0, wx.ALL | wx.EXPAND, 2)
 
         sizer_status = wx.BoxSizer(wx.HORIZONTAL)
