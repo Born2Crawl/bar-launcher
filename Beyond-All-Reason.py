@@ -969,6 +969,7 @@ class LauncherFrame(wx.Frame):
         sizer_top_horz.Add(sizer_config, 0, wx.EXPAND, 0)
 
         label_config = wx.StaticText(self.panel_main, wx.ID_ANY, "Config:")
+        label_config.SetBackgroundColour(wx.Colour(236, 236, 236))
         sizer_config.Add(label_config, 0, wx.ALL, 2)
 
         self.combobox_config = wx.ComboBox(self.panel_main, wx.ID_ANY, choices=[], style=wx.CB_DROPDOWN | wx.CB_READONLY)
@@ -1023,6 +1024,7 @@ class LauncherFrame(wx.Frame):
         sizer_bottom_right_vert.Add(self.button_start, 0, wx.ALL, 2)
 
         self.checkbox_update = wx.CheckBox(self.panel_main, wx.ID_ANY, "Update")
+        self.checkbox_update.SetBackgroundColour(wx.Colour(236, 236, 236))
         sizer_bottom_right_vert.Add(self.checkbox_update, 0, wx.ALL, 2)
 
         sizer_bottom_horz.Add((20, 100), 0, 0, 0)
