@@ -1040,7 +1040,6 @@ class LauncherFrame(wx.Frame):
         self.ToggleWindowStyle(wx.STAY_ON_TOP)
         self.ToggleWindowStyle(wx.STAY_ON_TOP)
 
-        self.initial_size = self.GetSize()
         self.tray_icon = CustomTaskBarIcon(self, icon_path)
         self.SetIcon(wx.Icon(icon_path))
 
@@ -1078,10 +1077,10 @@ class LauncherFrame(wx.Frame):
     def SetLogVisible(self, visible):
         if visible:
             self.text_ctrl_log.Show()
-            self.SetSize(self.initial_size + (0, 250))
+            self.SetSize((window_size[0], window_size[1]+250))
         else:
             self.text_ctrl_log.Hide()
-            self.SetSize(self.initial_size)
+            self.SetSize(window_size)
 
     def OnButtonToggleLog(self, event):
         self.SetLogVisible(not self.text_ctrl_log.IsShown())
