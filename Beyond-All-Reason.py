@@ -28,6 +28,7 @@ game_name = 'Beyond All Reason'
 log_file_name = 'bar-launcher.log'
 logs_bucket = 'bar-infologs'
 logs_url = f'https://{logs_bucket}.s3.amazonaws.com/'
+window_size = (800, 380)
 
 # Global variable for a child process. Since we're running everything sequentially, "there can be only one" (c)
 child_process = None
@@ -906,12 +907,16 @@ class MainPanel(wx.Panel):
         self.Draw(dc)
 
     def Draw(self, dc):
-        client_width, client_height = self.GetClientSize()
-        if not client_width:
+        client_width, client_height = window_size #self.GetClientSize()
+        if not client_width or not client_height:
             return
 
         dc.Clear()
-        client_height = int(client_width / self.proportion)
+        if int(client_width / self.proportion) >= client_height:
+            client_height = int(client_width / self.proportion)
+        else:
+            client_width = int(client_height * self.proportion)
+
         scaled_background = self.bg.Scale(client_width, client_height, wx.IMAGE_QUALITY_HIGH)
         dc.DrawBitmap(wx.Bitmap(scaled_background), 0, 0)
 
@@ -938,7 +943,7 @@ class LauncherFrame(wx.Frame):
 
         kwds["style"] = kwds.get("style", 0) | wx.CAPTION | wx.CLIP_CHILDREN | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.SYSTEM_MENU
         wx.Frame.__init__(self, *args, **kwds)
-        self.SetSize((800, 380))
+        self.SetSize(window_size)
         self.SetTitle(game_name)
 
         self.panel_main = MainPanel(self, background_path, font_path)
