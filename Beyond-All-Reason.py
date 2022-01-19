@@ -912,7 +912,7 @@ class MainPanel(wx.Panel):
             return
 
         # Calculation the new image size with the window proportions, adjusting for height or width depending on image proportions
-        if int(client_width / self.proportion) >= client_height:
+        if client_width // self.proportion >= client_height:
             client_height = int(client_width / self.proportion)
         else:
             client_width = int(client_height * self.proportion)
@@ -921,7 +921,7 @@ class MainPanel(wx.Panel):
 
         dc.Clear()
         # Drawing the image, aligning to be at the center as it will always be either wider or taller than the window
-        dc.DrawBitmap(wx.Bitmap(scaled_background), (window_size[0]-client_width)/2, (window_size[1]-client_height)/2)
+        dc.DrawBitmap(wx.Bitmap(scaled_background), (window_size[0]-client_width)//2, (window_size[1]-client_height)//2)
 
         font = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, "")
         try:
