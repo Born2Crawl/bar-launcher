@@ -865,7 +865,7 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
 
     def CreatePopupMenu(self):
         menu = wx.Menu()
-        self.CreateMenuItem(menu, 'Toggle Hide', self.OnToggleHide)
+        self.CreateMenuItem(menu, 'Show/hide', self.OnToggleHide)
         menu.AppendSeparator()
         self.CreateMenuItem(menu, 'Exit', self.OnTaskBarClose)
         return menu
