@@ -10,6 +10,7 @@ import stat
 import time
 import random
 import shutil
+import socket
 import hashlib
 import logging
 import tempfile
@@ -34,6 +35,9 @@ window_size = (800, 380)
 child_process = None
 
 main_frame = None # global variable for a window to send all events to
+
+HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
+PORT = 65533        # Port to listen on (non-privileged ports are > 1023)
 
 # Custom event to notify about Update/Start execution finished
 EVT_EXEC_FINISHED_ID = int(wx.NewIdRef(count=1))
@@ -547,6 +551,41 @@ class PrDownloader():
 
 pr_downloader = PrDownloader()
 
+
+# Thread class that executes logs upload
+class SocketListenerThread(Thread):
+    def __init__(self, host, port):
+        Thread.__init__(self)
+        self.host = host
+        self.port = port
+        self.start()
+
+    def run(self):
+        global main_frame
+        global logger
+
+        logger.info(f'SOCKET Starting socket on {self.host}:{self.port}')
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((self.host, self.port))
+            s.listen()
+            conn, addr = s.accept()
+            with conn:
+                print('SOCKET Connected by:', addr)
+                while True:
+                    data = conn.recv(1024)
+                    if not data:
+                        break
+                    #conn.sendall(data)
+                    print('SOCKET Received:', repr(data))
+                    #SOCKET Received: b'{"name":"Download","command":{"name":"Cloud9_V2","type":"map"}}\n'
+                    #SOCKET Received: b'{"name":"Download","command":{"name":"Beyond All Reason test-18973-561b35a","type":"game"}}\n'
+                    #SOCKET Received: b'{"name":"Download","command":{"name":"Beyond All Reason test-18974-ac74541","type":"game"}}\n'
+
+                    # pr-downloader.exe --filesystem-writepath Beyond-All-Reason\data --download-game "Beyond All Reason test-18709-f579961"
+                    # pr-downloader.exe --filesystem-writepath Beyond-All-Reason\data --download-game "Beyond All Reason test-18712-15c92bd"
+                    # pr-downloader.exe --filesystem-writepath Beyond-All-Reason\data --download-map "LV412 1.3"
+
 # Thread class that executes logs upload
 class LogUploaderThread(Thread):
     def __init__(self, file_name, bucket, object_name):
@@ -939,6 +978,8 @@ class LauncherFrame(wx.Frame):
 
     def __init__(self, *args, **kwds):
         global main_frame
+        global HOST
+        global PORT
 
         icon_path = platform_manager.get_resource_local_path('icon_image', force_download_fresh=False, ignore_download_fail=False)
         background_path = platform_manager.get_resource_local_path('background_image', force_download_fresh=False, ignore_download_fail=False)
@@ -1068,6 +1109,7 @@ class LauncherFrame(wx.Frame):
 
         self.updater_starter = None
         self.log_uploader = None
+        self.socket_listener = SocketListenerThread(HOST, PORT)
 
     def OnComboboxConfig(self, event=None):
         config_manager.current_config = config_manager.compatible_configs[self.combobox_config.GetSelection()]
