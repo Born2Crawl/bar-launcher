@@ -36,9 +36,6 @@ child_process = None
 
 main_frame = None # global variable for a window to send all events to
 
-HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
-PORT = 65533        # Port to listen on (non-privileged ports are > 1023)
-
 # Custom event to notify about Update/Start execution finished
 EVT_EXEC_FINISHED_ID = int(wx.NewIdRef(count=1))
 
@@ -554,20 +551,25 @@ pr_downloader = PrDownloader()
 
 # Thread class that executes logs upload
 class SocketListenerThread(Thread):
-    def __init__(self, host, port):
+    host = '127.0.0.1'
+    port = 0
+
+    def __init__(self):
         Thread.__init__(self)
-        self.host = host
-        self.port = port
         self.start()
+
+    def get_socket_connection(self):
+        return self.host, self.port
 
     def run(self):
         global main_frame
         global logger
 
-        logger.info(f'SOCKET Starting socket on {self.host}:{self.port}')
-
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((self.host, self.port))
+            self.host, self.port = s.getsockname()
+            logger.info(f'SOCKET Started socket on {self.host}:{self.port}')
+
             s.listen()
             conn, addr = s.accept()
             with conn:
@@ -856,6 +858,20 @@ class UpdaterStarterThread(Thread):
             set_gauge_progress(current_progres_step)
             set_status_text(current_progres_step, total_progress_steps, 'starting the game')
 
+            # Saving a socket config file
+            if socket_listener:
+                host, port = socket_listener.get_socket_connection()
+                sl_connection = {
+                    '_sl_address': host,
+                    '_sl_port': port,
+                    '_sl_write_path': platform_manager.data_dir,
+                }
+                sl_connection_string = json.dumps(sl_connection)
+                logger.info(sl_connection_string)
+                sl_connection_path = file_manager.join_path(platform_manager.data_dir, 'sl-connection.json')
+                with open(sl_connection_path, 'w') as outfile:
+                    outfile.write(sl_connection_string)
+
             if main_frame:
                 wx.PostEvent(main_frame, IconizeWindowEvent(True))
 
@@ -978,8 +994,7 @@ class LauncherFrame(wx.Frame):
 
     def __init__(self, *args, **kwds):
         global main_frame
-        global HOST
-        global PORT
+        global socket_listener
 
         icon_path = platform_manager.get_resource_local_path('icon_image', force_download_fresh=False, ignore_download_fail=False)
         background_path = platform_manager.get_resource_local_path('background_image', force_download_fresh=False, ignore_download_fail=False)
@@ -1109,7 +1124,7 @@ class LauncherFrame(wx.Frame):
 
         self.updater_starter = None
         self.log_uploader = None
-        self.socket_listener = SocketListenerThread(HOST, PORT)
+        socket_listener = SocketListenerThread()
 
     def OnComboboxConfig(self, event=None):
         config_manager.current_config = config_manager.compatible_configs[self.combobox_config.GetSelection()]
